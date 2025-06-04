@@ -87,7 +87,7 @@ def load_data():
     """Đọc dữ liệu từ file Excel local và tính toán quãng đường"""
     
     # Đường dẫn file Excel
-    file_path = '/Users/quang/Downloads/Dashboard DHYD_ver2-4.xlsx'
+    file_path = 'Dashboard DHYD_ver2-4.xlsx'
     
     try:
         # Đọc sheet "Dữ liệu gộp"
