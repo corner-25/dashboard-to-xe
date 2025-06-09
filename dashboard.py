@@ -280,7 +280,7 @@ def main():
             st.markdown('<div style="font-size: 3rem; text-align: center;">🏥</div>', unsafe_allow_html=True)
     
     with col_text:
-        st.markdown('<h1 class="header-text">Dashboard Quản lý Tổ xe Bệnh viện Đại học Y Dược </h1>', unsafe_allow_html=True)
+        st.markdown('<h1 class="header-text">Dashboard Quản lý Tổ xe Bệnh viện Đại học Y Dược TPHCM </h1>', unsafe_allow_html=False)
     
     st.markdown('</div>', unsafe_allow_html=True)
     
