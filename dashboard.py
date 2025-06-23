@@ -49,6 +49,24 @@ st.markdown("""
         border-left: 5px solid #1f77b4;
         margin: 0.5rem 0;
     }
+
+    /* Centered header container and text */
+    .header-container {
+        text-align: center;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 2rem;
+    }
+
+    .header-text {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #1f77b4;
+        text-align: center;
+        margin-top: 0.5rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1581,37 +1599,56 @@ def create_driver_performance_table(df):
     )
 
 def main():
-    # Header với logo và tiêu đề trên cùng một hàng
-    st.markdown('<div class="header-container">', unsafe_allow_html=True)
-    
-    # Tạo layout flex cho logo và text
-    col_logo, col_text = st.columns([1, 6])
-    
-    with col_logo:
-        # Kiểm tra logo
-        logo_paths = [
-            "assets/logo.png",
-            "logo.png",
-            "images/logo.png"
-        ]
-        
-        logo_found = False
-        for path in logo_paths:
-            if os.path.exists(path):
-                try:
-                    st.image(path, width=80)
-                    logo_found = True
-                    break
-                except:
-                    continue
-        
-        if not logo_found:
-            st.markdown('<div style="font-size: 3rem; text-align: center;">🏥</div>', unsafe_allow_html=True)
-    
-    with col_text:
-        st.markdown('<h1 class="header-text">Dashboard Quản lý Phương tiện vận chuyển tại Bệnh viện Đại học Y Dược TP. Hồ Chí Minh </h1>', unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+    """Main dashboard function - Complete version with all features"""
+    # HEADER: logo + title on one line (flexbox)
+    try:
+        # Encode logo to base64 for inline <img>
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        logo_base64 = ""
+        # Check for logo.png in current directory first, then in ./assets/
+        for p in [
+            os.path.join(script_dir, "logo.png"),                      # 1️⃣ same-level logo
+            os.path.join(script_dir, "assets", "logo.png")            # 2️⃣ assets folder
+        ]:
+            if os.path.exists(p):
+                with open(p, "rb") as f:
+                    logo_base64 = base64.b64encode(f.read()).decode()
+                break
+    except Exception:
+        logo_base64 = ""
+
+    # Build logo HTML (fallback emoji if logo not found)
+    if logo_base64:
+        logo_html = f"<img src='data:image/png;base64,{logo_base64}' style='height:150px; width:auto;' />"
+    else:
+        logo_html = "<div style='font-size:2.5rem; margin-right:12px;'>🏥</div>"
+
+    header_html = f"""
+    <div style='
+        width:100%;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        gap:12px;
+        padding:30px 0;
+        background:linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius:15px;
+        margin-bottom:30px;
+    '>
+        {logo_html}
+        <h1 style='
+            color:#1f77b4;
+            margin:0;
+            font-size:2.7rem;
+            font-weight:bold;
+            font-family:"Segoe UI", Arial, sans-serif;
+            text-shadow:2px 2px 4px rgba(0,0,0,0.1);
+            letter-spacing:1px;
+            text-align:center;
+        '>Dashboard Quản lý Phương tiện vận chuyển tại Bệnh viện Đại học Y Dược TP. Hồ Chí Minh</h1>
+    </div>
+    """
+    st.markdown(header_html, unsafe_allow_html=True)
     
     # Load data first
     with st.spinner("📊 Đang tải dữ liệu từ GitHub..."):
