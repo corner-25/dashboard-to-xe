@@ -120,7 +120,7 @@ class ManualFleetSync:
         return "YOUR_TOKEN_HERE"
 
     
-    def get_google_credentials():
+    def get_google_credentials(self):
         """Get Google credentials from Streamlit secrets or file"""
         try:
             import streamlit as st
@@ -148,20 +148,19 @@ class ManualFleetSync:
                     json.dump(creds_dict, f)
                     return f.name
         except Exception as e:
-            print(f"Error getting Streamlit secrets: {e}")
+            logger.error(f"Error getting Streamlit secrets: {e}")
         
         # Fallback to local file
-        credentials_file = "ivory-haven-463209-b8-09944271707f.json"
+        credentials_file = self.config['google_sheets']['credentials_file']
         if os.path.exists(credentials_file):
             return credentials_file
         
         return None
-
-# Update authenticate_google_sheets method
+    
     def authenticate_google_sheets(self) -> bool:
         """Xác thực Google Sheets"""
         try:
-            credentials_file = get_google_credentials()
+            credentials_file = self.get_google_credentials()  # Now calling self.get_google_credentials()
             
             if not credentials_file:
                 logger.error("❌ Không tìm thấy Google credentials")
@@ -194,7 +193,7 @@ class ManualFleetSync:
         except Exception as e:
             logger.error(f"❌ Google Sheets error: {e}")
             return False
-    
+            
     def read_all_sheets(self) -> Optional[pd.DataFrame]:
         """Đọc tất cả sheets và merge"""
         try:
