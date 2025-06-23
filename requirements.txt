@@ -1,0 +1,28 @@
+# Core Dependencies
+streamlit>=1.28.0
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Data Visualization
+plotly>=5.15.0
+
+# HTTP Requests
+requests>=2.31.0
+
+# Google Sheets Integration (for sync script)
+google-auth>=2.22.0
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.1.0
+google-api-python-client>=2.97.0
+
+# Date/Time Handling
+python-dateutil>=2.8.0
+
+# Optional: Enhanced data processing
+openpyxl>=3.1.0
+xlsxwriter>=3.1.0
+
+# Development/Testing (optional)
+pytest>=7.4.0
+black>=23.7.0
+flake8>=6.0.0
