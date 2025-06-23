@@ -1581,9 +1581,37 @@ def create_driver_performance_table(df):
     )
 
 def main():
-    """Main dashboard function - Complete version with all features"""
-    # Header
-    st.markdown('<div class="main-header">🚗 Dashboard Quản lý Đội xe ĐHYD - Complete</div>', unsafe_allow_html=True)
+    # Header với logo và tiêu đề trên cùng một hàng
+    st.markdown('<div class="header-container">', unsafe_allow_html=True)
+    
+    # Tạo layout flex cho logo và text
+    col_logo, col_text = st.columns([1, 6])
+    
+    with col_logo:
+        # Kiểm tra logo
+        logo_paths = [
+            "assets/logo.png",
+            "logo.png",
+            "images/logo.png"
+        ]
+        
+        logo_found = False
+        for path in logo_paths:
+            if os.path.exists(path):
+                try:
+                    st.image(path, width=80)
+                    logo_found = True
+                    break
+                except:
+                    continue
+        
+        if not logo_found:
+            st.markdown('<div style="font-size: 3rem; text-align: center;">🏥</div>', unsafe_allow_html=True)
+    
+    with col_text:
+        st.markdown('<h1 class="header-text">Dashboard Quản lý Phương tiện vận chuyển tại Bệnh viện Đại học Y Dược TP. Hồ Chí Minh </h1>', unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
     
     # Load data first
     with st.spinner("📊 Đang tải dữ liệu từ GitHub..."):
