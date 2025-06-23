@@ -120,15 +120,54 @@ class ManualFleetSync:
         return "YOUR_TOKEN_HERE"
 
     
+    def get_google_credentials():
+        """Get Google credentials from Streamlit secrets or file"""
+        try:
+            import streamlit as st
+            if hasattr(st, 'secrets') and 'google_credentials' in st.secrets:
+                import tempfile
+                import json
+                
+                # Convert secrets to dict
+                creds_dict = {
+                    "type": st.secrets.google_credentials.type,
+                    "project_id": st.secrets.google_credentials.project_id,
+                    "private_key_id": st.secrets.google_credentials.private_key_id,
+                    "private_key": st.secrets.google_credentials.private_key,
+                    "client_email": st.secrets.google_credentials.client_email,
+                    "client_id": st.secrets.google_credentials.client_id,
+                    "auth_uri": st.secrets.google_credentials.auth_uri,
+                    "token_uri": st.secrets.google_credentials.token_uri,
+                    "auth_provider_x509_cert_url": st.secrets.google_credentials.auth_provider_x509_cert_url,
+                    "client_x509_cert_url": st.secrets.google_credentials.client_x509_cert_url,
+                    "universe_domain": st.secrets.google_credentials.universe_domain
+                }
+                
+                # Create temporary file
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                    json.dump(creds_dict, f)
+                    return f.name
+        except Exception as e:
+            print(f"Error getting Streamlit secrets: {e}")
+        
+        # Fallback to local file
+        credentials_file = "ivory-haven-463209-b8-09944271707f.json"
+        if os.path.exists(credentials_file):
+            return credentials_file
+        
+        return None
+
+# Update authenticate_google_sheets method
     def authenticate_google_sheets(self) -> bool:
         """Xác thực Google Sheets"""
         try:
-            credentials_file = self.config['google_sheets']['credentials_file']
+            credentials_file = get_google_credentials()
             
-            if not os.path.exists(credentials_file):
-                logger.error(f"❌ Không tìm thấy file: {credentials_file}")
+            if not credentials_file:
+                logger.error("❌ Không tìm thấy Google credentials")
                 return False
             
+            # Read credentials
             with open(credentials_file, 'r', encoding='utf-8') as f:
                 creds_data = json.load(f)
             
