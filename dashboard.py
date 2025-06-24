@@ -21,8 +21,8 @@ from plotly.subplots import make_subplots
 
 # Page config
 st.set_page_config(
-    page_title="🚗 Fleet Management Dashboard",
-    page_icon="🚗",
+    page_title="Dashboard tổ xe UMC",
+    page_icon="logo.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -37,7 +37,7 @@ st.markdown("""
         text-align: center;
         margin-bottom: 2rem;
         padding: 1rem;
-        background: linear-gradient(90deg, #f8f9fa, #e9ecef, #f8f9fa);
+        background: #ffffff;
         border-radius: 10px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
@@ -1631,7 +1631,7 @@ def main():
         justify-content:center;
         gap:12px;
         padding:30px 0;
-        background:linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        background:#ffffff;
         border-radius:15px;
         margin-bottom:30px;
     '>
