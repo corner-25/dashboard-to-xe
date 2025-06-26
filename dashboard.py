@@ -146,7 +146,7 @@ def convert_time_to_hours(time_str):
             result = hours + (minutes / 60)
             return result # 🔧 CHIA 2 ĐỂ SỬA LỖI
         else:
-            return float(time_str) / 2  # 🔧 CHIA 2 CHO SỐ THUẦN
+            return float(time_str)  # 🔧 CHIA 2 CHO SỐ THUẦN
     except:
         return 0.0
 
@@ -698,7 +698,6 @@ def create_metrics_overview(df):
     
     # Time calculation
     if 'duration_hours' in df.columns:
-        df['duration_hours'] = df['duration_hours'].apply(convert_time_to_hours)
         valid_time_data = df[df['duration_hours'].notna() & (df['duration_hours'] >= 0)]
         total_hours = valid_time_data['duration_hours'].sum()
         avg_hours_per_trip = valid_time_data['duration_hours'].mean() if len(valid_time_data) > 0 else 0
