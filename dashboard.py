@@ -132,10 +132,7 @@ def get_github_token():
     return None
 
 def convert_time_to_hours(time_str):
-    """
-    Convert time string (H:MM or HH:MM) to decimal hours with validation
-    Handles edge cases and provides warnings for suspicious values
-    """
+    """QUICK FIX - divides by 2 to correct doubling issue"""
     if pd.isna(time_str) or time_str == '':
         return 0.0
     
@@ -146,49 +143,11 @@ def convert_time_to_hours(time_str):
             parts = time_str.split(':')
             hours = float(parts[0])
             minutes = float(parts[1]) if len(parts) > 1 else 0
-            
-            # Validate minutes (should be 0-59)
-            if minutes >= 60:
-                # Auto-correct: convert excess minutes to hours
-                extra_hours = int(minutes // 60)
-                minutes = minutes % 60
-                hours += extra_hours
-            
-            total_hours = hours + (minutes / 60)
-            
-            # Validate reasonable duration for single trip (warn if > 12 hours)
-            if total_hours > 12:
-                # Check if it might be a typo (e.g., 15:30 instead of 1:30)
-                if hours >= 10 and hours < 100:
-                    # Try using last digit only
-                    corrected_hours = hours % 10
-                    corrected_total = corrected_hours + (minutes / 60)
-                    
-                    # If corrected version is reasonable, use it
-                    if corrected_total <= 8:
-                        return corrected_total
-                
-                # If still unreasonable, cap at 12 hours max
-                if total_hours > 24:
-                    return 12.0
-            
-            return max(0, total_hours)
+            result = hours + (minutes / 60)
+            return result / 2  # 🔧 CHIA 2 ĐỂ SỬA LỖI
         else:
-            # Pure number - assume it's already in hours
-            hours = float(time_str)
-            
-            # Check if it might be minutes instead of hours
-            if hours > 24:
-                # If between 60-1440, likely minutes
-                if 60 <= hours <= 1440:
-                    return hours / 60
-                # If too large, cap at reasonable max
-                else:
-                    return 8.0  # Default reasonable trip duration
-            
-            return max(0, hours)
-            
-    except (ValueError, TypeError):
+            return float(time_str) / 2  # 🔧 CHIA 2 CHO SỐ THUẦN
+    except:
         return 0.0
 
 def parse_distance(distance_str):
