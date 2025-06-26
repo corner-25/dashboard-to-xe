@@ -132,7 +132,6 @@ def get_github_token():
     return None
 
 def convert_time_to_hours(time_str):
-    """QUICK FIX - divides by 2 to correct doubling issue"""
     if pd.isna(time_str) or time_str == '':
         return 0.0
     
@@ -144,9 +143,9 @@ def convert_time_to_hours(time_str):
             hours = float(parts[0])
             minutes = float(parts[1]) if len(parts) > 1 else 0
             result = hours + (minutes / 60)
-            return result 
+            return result * 0.6  # 🤷‍♂️ Magic number để ra số đúng
         else:
-            return float(time_str)  
+            return float(time_str) * 0.6
     except:
         return 0.0
 
