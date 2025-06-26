@@ -290,6 +290,37 @@ def load_large_file_via_git_api(headers):
     except Exception:
         return pd.DataFrame()
 
+def parse_revenue(revenue_str):
+    """
+    Parse revenue string and handle both formats: 600000 and 600,000
+    Also handles negative values and various edge cases
+    """
+    if pd.isna(revenue_str) or revenue_str == '':
+        return 0.0
+    
+    try:
+        # Convert to string and clean
+        revenue_str = str(revenue_str).strip()
+        
+        # Remove commas from the string
+        revenue_str = revenue_str.replace(',', '')
+        
+        # Remove any currency symbols (VNĐ, đ, etc.)
+        revenue_str = revenue_str.replace('VNĐ', '').replace('đ', '').replace('VND', '')
+        
+        # Remove any extra spaces
+        revenue_str = revenue_str.strip()
+        
+        # Convert to float
+        revenue = float(revenue_str)
+        
+        # Handle negative values (convert to positive)
+        return abs(revenue) if revenue < 0 else revenue
+        
+    except (ValueError, TypeError):
+        # If conversion fails, return 0
+        return 0.0
+        
 def process_dataframe(df):
     """Process DataFrame - Apply column mapping and clean data"""
     if df.empty:
@@ -338,7 +369,7 @@ def process_dataframe(df):
         
         # Process revenue - Convert to numeric but keep all rows
         if 'revenue_vnd' in df.columns:
-            df['revenue_vnd'] = pd.to_numeric(df['revenue_vnd'], errors='coerce').fillna(0)
+            df['revenue_vnd'] = df['revenue_vnd'].apply(parse_revenue)
         
         # Process fuel consumption
         if 'fuel_liters' in df.columns:
