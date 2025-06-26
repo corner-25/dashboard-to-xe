@@ -144,9 +144,9 @@ def convert_time_to_hours(time_str):
             hours = float(parts[0])
             minutes = float(parts[1]) if len(parts) > 1 else 0
             result = hours + (minutes / 60)
-            return result  # 🔧 CHIA 2 ĐỂ SỬA LỖI
+            return result / 2 # 🔧 CHIA 2 ĐỂ SỬA LỖI
         else:
-            return float(time_str)   # 🔧 CHIA 2 CHO SỐ THUẦN
+            return float(time_str) / 2  # 🔧 CHIA 2 CHO SỐ THUẦN
     except:
         return 0.0
 
