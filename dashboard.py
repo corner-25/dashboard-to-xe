@@ -132,21 +132,53 @@ def get_github_token():
     return None
 
 def convert_time_to_hours(time_str):
-    if pd.isna(time_str) or time_str == '':
+    """
+    Convert a duration string to decimal hours.
+
+    Accepted formats
+    ----------------
+    1. "hh:mm" or "hh:mm:ss"  – standard clock format.
+    2. "h.mm"                 – where the part after the dot represents
+                                minutes on a 100‑point scale (e.g. 1.30 → 1 h 30 m).
+    3. Plain numeric string   – already in hours.
+
+    Returns
+    -------
+    float
+        Duration in hours. Invalid or empty inputs return 0.0.
+    """
+    if pd.isna(time_str):
         return 0.0
-    
-    try:
-        time_str = str(time_str).strip()
-        
-        if ':' in time_str:
-            parts = time_str.split(':')
+
+    s = str(time_str).strip()
+    if s == "":
+        return 0.0
+
+    # Case 1: clock notation “hh:mm(:ss)”
+    if ":" in s:
+        parts = s.split(":")
+        try:
             hours = float(parts[0])
             minutes = float(parts[1]) if len(parts) > 1 else 0
-            result = hours + (minutes / 60)
-            return result * 0.6  # 🤷‍♂️ Magic number để ra số đúng
-        else:
-            return float(time_str) * 0.6
-    except:
+            seconds = float(parts[2]) if len(parts) > 2 else 0
+            return hours + minutes / 60 + seconds / 3600
+        except ValueError:
+            return 0.0
+
+    # Case 2: decimal minutes on a 100‑scale “h.mm”
+    if "." in s:
+        try:
+            hours_part, minutes_part = s.split(".", 1)
+            hours = float(hours_part)
+            minutes = float(minutes_part[:2])  # take at most two digits for minutes
+            return hours + minutes / 60
+        except ValueError:
+            return 0.0
+
+    # Case 3: plain numeric hours
+    try:
+        return float(s)
+    except ValueError:
         return 0.0
 
 def parse_distance(distance_str):
