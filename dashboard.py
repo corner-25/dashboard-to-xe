@@ -135,18 +135,18 @@ def convert_time_to_hours(time_str):
     """
     Convert a duration string to decimal hours.
 
-    Accepted formats
-    ----------------
-    1. "hh:mm" or "hh:mm:ss"  – standard clock format.
-    2. "h.mm"                 – where the part after the dot represents
-                                minutes on a 100‑point scale (e.g. 1.30 → 1 h 30 m).
-    3. Plain numeric string   – already in hours.
-
-    Returns
+    Accepts
     -------
-    float
-        Duration in hours. Invalid or empty inputs return 0.0.
+    • "hh:mm" or "hh:mm:ss"          → 2:30 → 2.5 h
+    • Variants with AM/PM appended   → "2:30:00 PM" → 2.5 h
+    • "h.mm" (decimal minutes /100) → "1.30" → 1 h 30 m
+    • Plain numeric string           → "2.5" → 2.5 h
+
+    Returns 0.0 for invalid / empty input.
     """
+    import re
+    import pandas as pd
+
     if pd.isna(time_str):
         return 0.0
 
@@ -154,28 +154,26 @@ def convert_time_to_hours(time_str):
     if s == "":
         return 0.0
 
-    # Case 1: clock notation “hh:mm(:ss)”
+    # Case 1 – clock notation with “:”
     if ":" in s:
-        parts = s.split(":")
-        try:
-            hours = float(parts[0])
-            minutes = float(parts[1]) if len(parts) > 1 else 0
-            seconds = float(parts[2]) if len(parts) > 2 else 0
-            return hours + minutes / 60 + seconds / 3600
-        except ValueError:
+        # Extract first three numeric groups separated by “:”
+        nums = re.findall(r"\d+", s)
+        if not nums:
             return 0.0
+        hours = float(nums[0])
+        minutes = float(nums[1]) if len(nums) > 1 else 0
+        seconds = float(nums[2]) if len(nums) > 2 else 0
+        return hours + minutes / 60 + seconds / 3600
 
-    # Case 2: decimal minutes on a 100‑scale “h.mm”
+    # Case 2 – decimal minutes on 100‑scale “h.mm”
     if "." in s:
         try:
-            hours_part, minutes_part = s.split(".", 1)
-            hours = float(hours_part)
-            minutes = float(minutes_part[:2])  # take at most two digits for minutes
-            return hours + minutes / 60
+            hrs, mins = s.split(".", 1)
+            return float(hrs) + float(mins[:2]) / 60
         except ValueError:
             return 0.0
 
-    # Case 3: plain numeric hours
+    # Case 3 – already numeric
     try:
         return float(s)
     except ValueError:
@@ -1604,10 +1602,10 @@ def create_driver_performance_table(df):
         df['revenue_vnd'] = pd.to_numeric(df['revenue_vnd'], errors='coerce').fillna(0)
     else:
         df['revenue_vnd'] = 0
-        
-    if 'duration_hours' in df.columns:
+
+    if 'duration_hours' in df.columns and not pd.api.types.is_numeric_dtype(df['duration_hours']):
         df['duration_hours'] = df['duration_hours'].apply(convert_time_to_hours)
-    else:
+    elif 'duration_hours' not in df.columns:
         df['duration_hours'] = 0
     
     # Calculate metrics per driver
