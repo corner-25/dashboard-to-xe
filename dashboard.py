@@ -146,7 +146,7 @@ def convert_time_to_hours(time_str):
             result = hours + (minutes / 60)
             return result / 2 # 🔧 CHIA 2 ĐỂ SỬA LỖI
         else:
-            return float(time_str) / 2  # 🔧 CHIA 2 CHO SỐ THUẦN
+            return float(time_str)   # 🔧 CHIA 2 CHO SỐ THUẦN
     except:
         return 0.0
 
