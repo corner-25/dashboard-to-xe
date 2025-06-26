@@ -144,9 +144,9 @@ def convert_time_to_hours(time_str):
             hours = float(parts[0])
             minutes = float(parts[1]) if len(parts) > 1 else 0
             result = hours + (minutes / 60)
-            return result # 🔧 CHIA 2 ĐỂ SỬA LỖI
+            return result 
         else:
-            return float(time_str)  # 🔧 CHIA 2 CHO SỐ THUẦN
+            return float(time_str)  
     except:
         return 0.0
 
@@ -924,9 +924,7 @@ def create_vehicle_performance_table(df):
     else:
         df['revenue_vnd'] = 0
         
-    if 'duration_hours' in df.columns:
-        df['duration_hours'] = df['duration_hours'].apply(convert_time_to_hours)
-    else:
+    if 'duration_hours' not in df.columns:
         df['duration_hours'] = 0
         
     if 'distance_km' in df.columns:
