@@ -14,7 +14,6 @@ from dotenv import load_dotenv
 import sys
 from datetime import datetime
 import json
-from collections import defaultdict
 import base64
 import plotly.express as px
 import plotly.graph_objects as go
@@ -132,62 +131,61 @@ def get_github_token():
     
     return None
 
-
 def parse_duration_to_hours(duration_str):
     """
-    Convert a duration string (h:mm, h:mm:ss, or “h:mm:ss AM/PM”) to decimal
-    hours. The function is lenient and safe for all known bad inputs.
-
+    Chuyển đổi thời gian từ format h:mm sang số giờ (float)
+    
     Args:
-        duration_str (str): e.g. "2:30", "1:15:40", "2:20:00 AM"
-
+        duration_str (str): Thời gian format h:mm hoặc h:mm:ss
+    
     Returns:
-        float: duration expressed in hours (>= 0). Returns 0.0 on error.
+        float: Số giờ
     """
-    if not duration_str:
+    if not duration_str or duration_str == "":
         return 0.0
-
-    # Normalise string
+    
+    # Loại bỏ khoảng trắng và các ký tự không mong muốn
     duration_str = str(duration_str).strip()
-
-    # Remove AM/PM if present
+    
+    # Xử lý các format khác nhau
+    # Format: "2:20:00 AM" -> chỉ lấy phần thời gian
     if "AM" in duration_str or "PM" in duration_str:
         duration_str = duration_str.split()[0]
-
+    
     try:
+        # Split theo dấu ":"
         parts = duration_str.split(":")
-        if len(parts) == 2:          # h:mm
-            hours, minutes = map(int, parts)
+        
+        if len(parts) == 2:  # h:mm
+            hours = int(parts[0])
+            minutes = int(parts[1])
             return hours + minutes / 60.0
-        elif len(parts) == 3:        # h:mm:ss
-            hours, minutes, seconds = map(int, parts)
+        elif len(parts) == 3:  # h:mm:ss
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            seconds = int(parts[2])
             return hours + minutes / 60.0 + seconds / 3600.0
+        else:
+            return 0.0
     except (ValueError, IndexError):
-        pass
+        return 0.0
 
-    return 0.0
-
-# Back‑compat shim (used earlier in the pipeline)
-def parse_duration_safe(duration_str):
-    return parse_duration_to_hours(duration_str)
-def calculate_driver_duration_summary(records):
+def ensure_duration_parsed(df):
     """
-    Summarise total working hours for each driver using the robust duration parser.
-
-    Args:
-        records (Iterable[dict]): Raw fleet records (each a dict‑like row).
-
-    Returns:
-        dict[str, float]: Mapping {driver_name: total_hours}
+    Đảm bảo cột duration_hours được parse đúng trong toàn bộ DataFrame
     """
-    summary = defaultdict(float)
-    for rec in records:
-        driver = rec.get("Tên tài xế", "").strip()
-        # Ignore empty or email‑like names
-        if not driver or "@" in driver:
-            continue
-        summary[driver] += parse_duration_to_hours(rec.get("Thời gian", ""))
-    return dict(summary)
+    if 'duration_hours' not in df.columns:
+        return df
+    
+    # Kiểm tra xem cột đã là numeric chưa
+    if not pd.api.types.is_numeric_dtype(df['duration_hours']):
+        # Nếu chưa, parse từ string
+        df['duration_hours'] = df['duration_hours'].apply(parse_duration_to_hours)
+    else:
+        # Nếu đã là numeric nhưng có thể có NaN, fill 0
+        df['duration_hours'] = df['duration_hours'].fillna(0)
+    
+    return df
 
 def parse_distance(distance_str):
     """Parse distance string and handle negative values"""
@@ -399,9 +397,9 @@ def process_dataframe(df):
         
         # STEP 4: Process data types
         
-        # Process duration - Convert to decimal hours
+        # FIXED: Process duration - Convert to decimal hours using correct function name
         if 'duration_hours' in df.columns:
-            df['duration_hours'] = df['duration_hours'].apply(parse_duration_safe)
+            df['duration_hours'] = df['duration_hours'].apply(parse_duration_to_hours)
         
         # Process distance - Handle negative values but keep all rows
         if 'distance_km' in df.columns:
@@ -720,6 +718,7 @@ def create_vehicle_filter_sidebar(df):
     
     return df
 
+# FIXED: create_metrics_overview() - ensure duration is parsed
 def create_metrics_overview(df):
     """Create overview metrics using English column names"""
     if df.empty:
@@ -727,6 +726,9 @@ def create_metrics_overview(df):
         return
     
     st.markdown("## 📊 Tổng quan hoạt động")
+    
+    # FIXED: Ensure duration is properly parsed
+    df = ensure_duration_parsed(df)
     
     # Use ALL data without any filtering
     total_trips = len(df)
@@ -745,9 +747,14 @@ def create_metrics_overview(df):
         total_revenue = 0
         avg_revenue_per_trip = 0
     
-    # Time calculation
+    # FIXED: Time calculation - ensure proper parsing
     if 'duration_hours' in df.columns:
-        valid_time_data = df[df['duration_hours'].notna() & (df['duration_hours'] >= 0)]
+        # Filter out invalid time data (negative or extremely large values)
+        valid_time_data = df[
+            df['duration_hours'].notna() & 
+            (df['duration_hours'] >= 0) & 
+            (df['duration_hours'] <= 24)  # Reasonable daily limit
+        ]
         total_hours = valid_time_data['duration_hours'].sum()
         avg_hours_per_trip = valid_time_data['duration_hours'].mean() if len(valid_time_data) > 0 else 0
     else:
@@ -826,6 +833,7 @@ def create_metrics_overview(df):
             value=f"{avg_hours_per_trip:.1f} giờ",
             help="Thời gian trung bình mỗi chuyến"
         )
+
 
 def create_frequency_metrics(df):
     """Create frequency and activity metrics using English columns"""
@@ -955,6 +963,9 @@ def create_vehicle_performance_table(df):
         st.warning("⚠️ Không có dữ liệu xe")
         return
     
+    # FIXED: Ensure duration is properly parsed
+    df = ensure_duration_parsed(df)
+    
     # Ensure datetime conversion
     try:
         if 'record_date' in df.columns:
@@ -977,6 +988,7 @@ def create_vehicle_performance_table(df):
     else:
         df['revenue_vnd'] = 0
         
+    # FIXED: Duration is already parsed by ensure_duration_parsed()
     if 'duration_hours' not in df.columns:
         df['duration_hours'] = 0
         
@@ -1001,7 +1013,15 @@ def create_vehicle_performance_table(df):
         total_trips = len(vehicle_data)
         total_revenue = float(vehicle_data['revenue_vnd'].sum())
         avg_revenue = float(vehicle_data['revenue_vnd'].mean()) if total_trips > 0 else 0.0
-        total_hours = float(vehicle_data['duration_hours'].sum())
+        
+        # FIXED: Duration calculation - filter out invalid values
+        valid_duration_data = vehicle_data[
+            vehicle_data['duration_hours'].notna() & 
+            (vehicle_data['duration_hours'] >= 0) & 
+            (vehicle_data['duration_hours'] <= 24)
+        ]
+        total_hours = float(valid_duration_data['duration_hours'].sum())
+        
         total_distance = float(vehicle_data['distance_km'].sum())
         total_fuel = float(vehicle_data['fuel_liters'].sum())
         
@@ -1613,6 +1633,9 @@ def create_driver_performance_table(df):
         st.warning("⚠️ Không có dữ liệu tài xế")
         return
     
+    # FIXED: Ensure duration is properly parsed
+    df = ensure_duration_parsed(df)
+    
     # Ensure datetime conversion
     try:
         if 'record_date' in df.columns:
@@ -1627,10 +1650,8 @@ def create_driver_performance_table(df):
     else:
         df['revenue_vnd'] = 0
 
-    if 'duration_hours' in df.columns and not pd.api.types.is_numeric_dtype(df['duration_hours']):
-        df['duration_hours'] = df['duration_hours'].apply(parse_duration_to_hours)
-    elif 'duration_hours' not in df.columns:
-        df['duration_hours'] = 0
+    # FIXED: Duration is already parsed by ensure_duration_parsed()
+    # Remove the redundant parsing that was causing issues
     
     # Calculate metrics per driver
     drivers = df['driver_name'].unique()
@@ -1642,7 +1663,14 @@ def create_driver_performance_table(df):
         # Basic metrics
         total_trips = len(driver_data)
         total_revenue = float(driver_data['revenue_vnd'].sum())
-        total_hours = float(driver_data['duration_hours'].sum())
+        
+        # FIXED: Duration calculation - filter out invalid values
+        valid_duration_data = driver_data[
+            driver_data['duration_hours'].notna() & 
+            (driver_data['duration_hours'] >= 0) & 
+            (driver_data['duration_hours'] <= 24)
+        ]
+        total_hours = float(valid_duration_data['duration_hours'].sum())
         
         # Days calculation
         if 'date' in driver_data.columns:
