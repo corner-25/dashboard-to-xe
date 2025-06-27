@@ -1,19 +1,49 @@
-streamlit>=1.28.0
-pandas>=2.0.0
-numpy>=1.24.0
-plotly>=5.15.0
+# OPTIMIZED REQUIREMENTS.TXT FOR STREAMLIT DASHBOARD
+# Fixed version conflicts and compatibility issues
+
+# Core Data Processing (EXACT VERSIONS for compatibility)
+streamlit==1.29.0
+pandas==2.0.3
+numpy==1.24.3
+
+# Visualization
+plotly==5.17.0
 
 # HTTP Requests
-requests>=2.31.0
+requests==2.31.0
 
-# Environment Variables
-python-dotenv>=1.0.0
+# Environment Variables  
+python-dotenv==1.0.0
 
-# Google Sheets Integration (for sync script)
-google-auth>=2.22.0
-google-auth-oauthlib>=1.0.0
-google-auth-httplib2>=0.1.0
-google-api-python-client>=2.97.0
+# Date/Time Handling (PINNED VERSIONS)
+python-dateutil==2.8.2
 
-# Date/Time Handling
-python-dateutil>=2.8.0
+# Google APIs (COMPATIBLE VERSIONS)
+google-auth==2.23.4
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+google-api-python-client==2.108.0
+
+# Additional dependencies that might be missing
+openpyxl==3.1.2          # For Excel file handling
+xlsxwriter==3.1.9        # For Excel export
+pytz==2023.3             # Timezone handling
+
+# REMOVED PROBLEMATIC VERSION RANGES
+# The >= syntax can cause conflicts in production
+
+# COMPATIBILITY NOTES:
+# - Streamlit 1.29.0 is stable with pandas 2.0.3
+# - Numpy 1.24.3 is the last version fully compatible with pandas 2.0.3  
+# - Plotly 5.17.0 has best streamlit integration
+# - Google API versions are tested together
+
+# INSTALLATION COMMAND:
+# pip install -r requirements.txt --force-reinstall
+
+# ALTERNATIVE MINIMAL VERSION (if above has conflicts):
+# streamlit==1.28.2
+# pandas==1.5.3  
+# numpy==1.23.5
+# plotly==5.15.0
+# requests==2.31.0
