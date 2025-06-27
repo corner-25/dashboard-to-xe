@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Fleet Management Dashboard - COMPLETE VERSION with FIXED TIME CALCULATION
-Dashboard with proper time parsing for hh:mm format + ALL ORIGINAL FEATURES
+Fleet Management Dashboard - Complete Version with Date Filters
+Dashboard with proper column mapping, date filtering, and all analysis features
 """
 
 import streamlit as st
@@ -18,8 +18,6 @@ import base64
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import warnings
-warnings.filterwarnings('ignore')
 
 # Page config
 st.set_page_config(
@@ -52,6 +50,7 @@ st.markdown("""
         margin: 0.5rem 0;
     }
 
+    /* Centered header container and text */
     .header-container {
         text-align: center;
         display: flex;
@@ -74,11 +73,11 @@ st.markdown("""
 # COLUMN MAPPING - Vietnamese to English
 COLUMN_MAPPING = {
     # Drop these columns (set to None to ignore)
-    'Timestamp': None,
-    'Email Address': None,
-    'Ghi chú': None,
-    'Chỉ số đồng hồ sau khi kết thúc chuyến xe': None,
-    'Ghi nhận chi tiết chuyến xe': None,
+    'Timestamp': None,  # Ignore timestamp
+    'Email Address': None,  # Already converted to driver name
+    'Ghi chú': None,  # Notes - not used for KPI
+    'Chỉ số đồng hồ sau khi kết thúc chuyến xe': None,  # Odometer - already processed
+    'Ghi nhận chi tiết chuyến xe': None,  # Trip details - only for reporting
     
     # Core time fields
     'Thời gian bắt đầu': 'start_time',
@@ -88,10 +87,10 @@ COLUMN_MAPPING = {
     # Location and classification
     'Điểm đến': 'destination',
     'Phân loại công tác': 'work_category',
-    'Nội thành/ngoại thành': 'area_type',
+    'Nội thành/ngoại thành': 'area_type',  # Urban/suburban
     
     # Date and numeric metrics
-    'Ngày ghi nhận': 'record_date',
+    'Ngày ghi nhận': 'record_date',  # mm/dd/yyyy format
     'Quãng đường': 'distance_km',
     'Đổ nhiên liệu': 'fuel_liters',
     
@@ -99,24 +98,28 @@ COLUMN_MAPPING = {
     'Doanh thu': 'revenue_vnd',
     'Chi tiết chuyến xe': 'trip_details',
     
-    # Vehicle and driver info
+    # Vehicle and driver info (added during sync)
     'Mã xe': 'vehicle_id',
     'Tên tài xế': 'driver_name',
-    'Loại xe': 'vehicle_type'
+    'Loại xe': 'vehicle_type'  # 'Hành chính' or 'Cứu thương'
 }
 
 def get_github_token():
     """Get GitHub token for private repo access"""
+    # Priority 1: Read from sync_config.json
     try:
+        import streamlit as st
         if hasattr(st, 'secrets') and 'GITHUB_TOKEN' in st.secrets:
             return st.secrets['GITHUB_TOKEN']
     except:
         pass
     
+    # Priority 2: Environment variable (.env file)
     token = os.getenv('GITHUB_TOKEN')
     if token and len(token) > 10:
         return token
     
+    # Priority 3: File (backward compatibility)
     if os.path.exists("github_token.txt"):
         try:
             with open("github_token.txt", 'r') as f:
@@ -130,118 +133,57 @@ def get_github_token():
 
 def parse_duration_to_hours(duration_str):
     """
-    🔧 ROBUST TIME PARSER - Converts hh:mm format to decimal hours
-    Handles all edge cases including None, NaN, empty strings, and invalid formats
+    Chuyển đổi thời gian từ format h:mm sang số giờ (float)
     
     Args:
-        duration_str: Time in hh:mm format (can be str, float, int, None, NaN)
+        duration_str (str): Thời gian format h:mm hoặc h:mm:ss
     
     Returns:
-        float: Hours as decimal (e.g., 2:30 -> 2.5)
+        float: Số giờ
     """
-    # Step 1: Handle None and NaN values
-    if duration_str is None:
+    if not duration_str or duration_str == "":
         return 0.0
     
-    if pd.isna(duration_str):
-        return 0.0
+    # Loại bỏ khoảng trắng và các ký tự không mong muốn
+    duration_str = str(duration_str).strip()
     
-    if isinstance(duration_str, (float, np.floating)) and np.isnan(duration_str):
-        return 0.0
+    # Xử lý các format khác nhau
+    # Format: "2:20:00 AM" -> chỉ lấy phần thời gian
+    if "AM" in duration_str or "PM" in duration_str:
+        duration_str = duration_str.split()[0]
     
-    # Step 2: Handle empty strings and whitespace
-    if str(duration_str).strip() == "":
-        return 0.0
-    
-    # Step 3: Handle already numeric values (edge case)
-    if isinstance(duration_str, (int, float, np.number)):
-        try:
-            val = float(duration_str)
-            return max(0.0, val) if val >= 0 else 0.0
-        except:
-            return 0.0
-    
-    # Step 4: Process string values
     try:
-        duration_str = str(duration_str).strip().upper()
+        # Split theo dấu ":"
+        parts = duration_str.split(":")
         
-        # Handle special cases
-        if duration_str in ['NA', 'NAN', 'NONE', 'NULL', '']:
-            return 0.0
-        
-        # Remove AM/PM if present
-        if "AM" in duration_str or "PM" in duration_str:
-            duration_str = duration_str.split()[0]
-        
-        # Step 5: Parse time format
-        if ":" in duration_str:
-            parts = duration_str.split(":")
-            
-            if len(parts) == 2:  # hh:mm
-                try:
-                    hours = int(float(parts[0]))
-                    minutes = int(float(parts[1]))
-                    
-                    # Validate ranges
-                    if hours < 0 or minutes < 0 or minutes >= 60:
-                        return 0.0
-                    
-                    return hours + minutes / 60.0
-                    
-                except (ValueError, TypeError):
-                    return 0.0
-                    
-            elif len(parts) == 3:  # hh:mm:ss
-                try:
-                    hours = int(float(parts[0]))
-                    minutes = int(float(parts[1]))
-                    seconds = int(float(parts[2]))
-                    
-                    # Validate ranges
-                    if hours < 0 or minutes < 0 or seconds < 0 or minutes >= 60 or seconds >= 60:
-                        return 0.0
-                    
-                    return hours + minutes / 60.0 + seconds / 3600.0
-                    
-                except (ValueError, TypeError):
-                    return 0.0
-            else:
-                return 0.0
+        if len(parts) == 2:  # h:mm
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            return hours + minutes / 60.0
+        elif len(parts) == 3:  # h:mm:ss
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            seconds = int(parts[2])
+            return hours + minutes / 60.0 + seconds / 3600.0
         else:
-            # Try to parse as decimal hours
-            try:
-                val = float(duration_str)
-                return max(0.0, val) if val >= 0 else 0.0
-            except:
-                return 0.0
-                
-    except Exception:
+            return 0.0
+    except (ValueError, IndexError):
         return 0.0
 
 def ensure_duration_parsed(df):
     """
-    🔧 DURATION VALIDATOR - Ensures duration column is properly processed
+    Đảm bảo cột duration_hours được parse đúng trong toàn bộ DataFrame
     """
-    if df is None or df.empty or 'duration_hours' not in df.columns:
+    if 'Thời gian' not in df.columns:
         return df
     
-    original_count = len(df)
-    
-    # Apply robust parsing
-    df['duration_hours'] = df['duration_hours'].apply(parse_duration_to_hours)
-    
-    # Convert to numeric and fill NaN with 0
-    df['duration_hours'] = pd.to_numeric(df['duration_hours'], errors='coerce').fillna(0.0)
-    
-    # Filter out unrealistic values (more than 24 hours per trip)
-    df.loc[df['duration_hours'] > 24, 'duration_hours'] = 0.0
-    df.loc[df['duration_hours'] < 0, 'duration_hours'] = 0.0
-    
-    # Log parsing results
-    total_hours = df['duration_hours'].sum()
-    valid_records = (df['duration_hours'] > 0).sum()
-    
-    st.sidebar.success(f"⏱️ Duration: {total_hours:.1f}h from {valid_records}/{original_count} records")
+    # Kiểm tra xem cột đã là numeric chưa
+    if not pd.api.types.is_numeric_dtype(df['Thời gian']):
+        # Nếu chưa, parse từ string
+        df['Thời gian'] = df['Thời gian'].apply(parse_duration_to_hours)
+    else:
+        # Nếu đã là numeric nhưng có thể có NaN, fill 0
+        df['Thời gian'] = df['Thời gian'].fillna(0)
     
     return df
 
@@ -256,26 +198,9 @@ def parse_distance(distance_str):
     except:
         return 0.0
 
-def parse_revenue(revenue_str):
-    """Parse revenue string and handle both formats: 600000 and 600,000"""
-    if pd.isna(revenue_str) or revenue_str == '':
-        return 0.0
-    
-    try:
-        revenue_str = str(revenue_str).strip()
-        revenue_str = revenue_str.replace(',', '')
-        revenue_str = revenue_str.replace('VNĐ', '').replace('đ', '').replace('VND', '')
-        revenue_str = revenue_str.strip()
-        
-        revenue = float(revenue_str)
-        return abs(revenue) if revenue < 0 else revenue
-        
-    except (ValueError, TypeError):
-        return 0.0
-
 @st.cache_data(ttl=60)
 def load_data_from_github():
-    """Load data from GitHub repository"""
+    """Load data from GitHub repository - Large file support"""
     github_token = get_github_token()
     
     if not github_token:
@@ -288,6 +213,7 @@ def load_data_from_github():
         'User-Agent': 'Fleet-Dashboard-App'
     }
     
+    # Try Contents API first
     api_url = "https://api.github.com/repos/corner-25/vehicle-storage/contents/data/latest/fleet_data_latest.json"
     
     try:
@@ -296,9 +222,11 @@ def load_data_from_github():
         if response.status_code == 200:
             api_response = response.json()
             
+            # Check if file is too large for Contents API (>1MB)
             if api_response.get('size', 0) > 1000000:
                 return load_large_file_via_git_api(headers)
             
+            # Normal Contents API flow
             content = base64.b64decode(api_response['content']).decode('utf-8')
             
             if not content.strip():
@@ -316,6 +244,7 @@ def load_data_from_github():
 def load_large_file_via_git_api(headers):
     """Load large file using Git API"""
     try:
+        # Get latest commit
         commits_url = "https://api.github.com/repos/corner-25/vehicle-storage/commits/main"
         commits_response = requests.get(commits_url, headers=headers, timeout=30)
         
@@ -325,12 +254,14 @@ def load_large_file_via_git_api(headers):
         latest_commit = commits_response.json()
         tree_sha = latest_commit['commit']['tree']['sha']
         
+        # Navigate to data/latest/fleet_data_latest.json via tree API
         tree_url = f"https://api.github.com/repos/corner-25/vehicle-storage/git/trees/{tree_sha}"
         tree_response = requests.get(tree_url, headers=headers, timeout=30)
         
         if tree_response.status_code != 200:
             return pd.DataFrame()
         
+        # Find data folder
         tree_data = tree_response.json()
         data_folder = None
         for item in tree_data.get('tree', []):
@@ -341,12 +272,14 @@ def load_large_file_via_git_api(headers):
         if not data_folder:
             return pd.DataFrame()
         
+        # Get data folder tree
         data_tree_url = f"https://api.github.com/repos/corner-25/vehicle-storage/git/trees/{data_folder}"
         data_tree_response = requests.get(data_tree_url, headers=headers, timeout=30)
         
         if data_tree_response.status_code != 200:
             return pd.DataFrame()
         
+        # Find latest folder
         data_tree_data = data_tree_response.json()
         latest_folder = None
         for item in data_tree_data.get('tree', []):
@@ -357,12 +290,14 @@ def load_large_file_via_git_api(headers):
         if not latest_folder:
             return pd.DataFrame()
         
+        # Get latest folder tree
         latest_tree_url = f"https://api.github.com/repos/corner-25/vehicle-storage/git/trees/{latest_folder}"
         latest_tree_response = requests.get(latest_tree_url, headers=headers, timeout=30)
         
         if latest_tree_response.status_code != 200:
             return pd.DataFrame()
         
+        # Find JSON file
         latest_tree_data = latest_tree_response.json()
         file_blob = None
         for item in latest_tree_data.get('tree', []):
@@ -373,6 +308,7 @@ def load_large_file_via_git_api(headers):
         if not file_blob:
             return pd.DataFrame()
         
+        # Get file content via blob API
         blob_url = f"https://api.github.com/repos/corner-25/vehicle-storage/git/blobs/{file_blob}"
         blob_response = requests.get(blob_url, headers=headers, timeout=60)
         
@@ -392,53 +328,95 @@ def load_large_file_via_git_api(headers):
     except Exception:
         return pd.DataFrame()
 
+def parse_revenue(revenue_str):
+    """
+    Parse revenue string and handle both formats: 600000 and 600,000
+    Also handles negative values and various edge cases
+    """
+    if pd.isna(revenue_str) or revenue_str == '':
+        return 0.0
+    
+    try:
+        # Convert to string and clean
+        revenue_str = str(revenue_str).strip()
+        
+        # Remove commas from the string
+        revenue_str = revenue_str.replace(',', '')
+        
+        # Remove any currency symbols (VNĐ, đ, etc.)
+        revenue_str = revenue_str.replace('VNĐ', '').replace('đ', '').replace('VND', '')
+        
+        # Remove any extra spaces
+        revenue_str = revenue_str.strip()
+        
+        # Convert to float
+        revenue = float(revenue_str)
+        
+        # Handle negative values (convert to positive)
+        return abs(revenue) if revenue < 0 else revenue
+        
+    except (ValueError, TypeError):
+        # If conversion fails, return 0
+        return 0.0
+        
 def process_dataframe(df):
-    """🔧 MAIN DATA PROCESSOR - Apply column mapping and clean data"""
+    """Process DataFrame - Apply column mapping and clean data"""
     if df.empty:
         return df
     
     try:
         st.sidebar.info(f"📥 Raw data: {len(df)} records, {len(df.columns)} columns")
         
-        # Step 1: Apply column mapping
+        # STEP 1: Apply column mapping
+        # Create a reverse mapping for flexibility
         reverse_mapping = {}
         for viet_col, eng_col in COLUMN_MAPPING.items():
-            if eng_col is not None:
+            if eng_col is not None:  # Only map non-None columns
+                # Handle partial matches for long Vietnamese column names
                 for col in df.columns:
                     if viet_col in col:
                         reverse_mapping[col] = eng_col
                         break
         
+        # Rename columns
         df = df.rename(columns=reverse_mapping)
         
-        # Step 2: Drop unnecessary columns
+        # STEP 2: Drop unnecessary columns (those mapped to None)
         drop_columns = []
         for viet_col in COLUMN_MAPPING.keys():
             if COLUMN_MAPPING[viet_col] is None:
+                # Find columns that contain this Vietnamese text
                 for col in df.columns:
                     if viet_col in col:
                         drop_columns.append(col)
         
         df = df.drop(columns=drop_columns, errors='ignore')
+        
+        # STEP 3: Handle duplicate columns by merging them
         df = df.loc[:, ~df.columns.duplicated()]
         
-        # 🔧 Step 3: CRITICAL - Process duration with enhanced validation
-        if 'duration_hours' in df.columns:
-            st.sidebar.info("🔧 Processing duration column...")
-            df = ensure_duration_parsed(df)
+        # STEP 4: Process data types
         
-        # Step 4: Process other columns
+        # FIXED: Process duration - Convert to decimal hours using correct function name
+        if 'Thời gian' in df.columns:
+            df['Thời gian'] = df['Thời gian'].apply(parse_duration_to_hours)
+        
+        # Process distance - Handle negative values but keep all rows
         if 'distance_km' in df.columns:
             df['distance_km'] = df['distance_km'].apply(parse_distance)
         
+        # Process revenue - Convert to numeric but keep all rows
         if 'revenue_vnd' in df.columns:
             df['revenue_vnd'] = df['revenue_vnd'].apply(parse_revenue)
         
+        # Process fuel consumption
         if 'fuel_liters' in df.columns:
             df['fuel_liters'] = pd.to_numeric(df['fuel_liters'], errors='coerce').fillna(0)
         
+        # Process datetime columns - Handle mm/dd/yyyy format
         if 'record_date' in df.columns:
-            df['record_date'] = pd.to_datetime(df['record_date'], errors='coerce')
+            df['record_date'] = pd.to_datetime(df['record_date'], errors='coerce')  # Tự động detect format
+            # Create helper columns
             df['date'] = df['record_date'].dt.date
             df['month'] = df['record_date'].dt.to_period('M').astype(str)
         
@@ -501,20 +479,25 @@ def run_sync_script():
         return False
 
 def filter_data_by_date_range(df, start_date, end_date):
-    """Filter dataframe by date range"""
+    """Filter dataframe by date range - FIXED to not drop invalid dates"""
     if df.empty or 'record_date' not in df.columns:
         return df
     
     try:
+        # Ensure record_date is datetime
         df['record_date'] = pd.to_datetime(df['record_date'], format='%m/%d/%Y', errors='coerce')
         
+        # Count invalid dates for debugging
         invalid_count = df['record_date'].isna().sum()
         if invalid_count > 0:
-            st.sidebar.warning(f"⚠️ Found {invalid_count} records with invalid dates")
+            st.sidebar.warning(f"⚠️ Found {invalid_count} records with invalid dates - keeping them!")
         
+        # FIXED: Include records with invalid dates in filter
+        # For invalid dates, we'll keep them in the result instead of dropping
         valid_mask = (df['record_date'].notna()) & (df['record_date'].dt.date >= start_date) & (df['record_date'].dt.date <= end_date)
         invalid_mask = df['record_date'].isna()
         
+        # Keep both valid dates in range AND invalid dates
         combined_mask = valid_mask | invalid_mask
         filtered_df = df[combined_mask].copy()
         
@@ -548,10 +531,13 @@ def create_date_filter_sidebar(df):
     """Create date range filter in sidebar"""
     st.sidebar.markdown("### 📅 Bộ lọc thời gian")
     
+    # Get data date range
     min_date, max_date = get_date_range_from_data(df)
     
+    # Show data range info
     st.sidebar.info(f"📊 Dữ liệu có: {min_date.strftime('%d/%m/%Y')} - {max_date.strftime('%d/%m/%Y')}")
     
+    # FIXED: Reset session state if current values are outside new data range
     reset_needed = False
     if 'date_filter_start' in st.session_state:
         if st.session_state.date_filter_start < min_date or st.session_state.date_filter_start > max_date:
@@ -567,11 +553,13 @@ def create_date_filter_sidebar(df):
         if 'date_filter_end' in st.session_state:
             del st.session_state.date_filter_end
     
+    # Initialize session state for date filters if not exists or after reset
     if 'date_filter_start' not in st.session_state:
         st.session_state.date_filter_start = min_date
     if 'date_filter_end' not in st.session_state:
         st.session_state.date_filter_end = max_date
     
+    # Ensure session state values are within valid range
     if st.session_state.date_filter_start < min_date:
         st.session_state.date_filter_start = min_date
     if st.session_state.date_filter_start > max_date:
@@ -581,6 +569,7 @@ def create_date_filter_sidebar(df):
     if st.session_state.date_filter_end > max_date:
         st.session_state.date_filter_end = max_date
     
+    # Date range selector
     col1, col2 = st.sidebar.columns(2)
     
     with col1:
@@ -601,15 +590,18 @@ def create_date_filter_sidebar(df):
             key="end_date_input"
         )
     
+    # Update session state when inputs change
     if start_date != st.session_state.date_filter_start:
         st.session_state.date_filter_start = start_date
     if end_date != st.session_state.date_filter_end:
         st.session_state.date_filter_end = end_date
     
+    # Validate date range
     if start_date > end_date:
         st.sidebar.error("❌ Ngày bắt đầu phải nhỏ hơn ngày kết thúc!")
         return df, min_date, max_date
     
+    # Quick filter buttons
     st.sidebar.markdown("**🚀 Bộ lọc nhanh:**")
     
     col1, col2 = st.sidebar.columns(2)
@@ -637,11 +629,14 @@ def create_date_filter_sidebar(df):
             st.session_state.date_filter_end = max_date
             st.rerun()
     
+    # Use the session state values for filtering
     filter_start = st.session_state.date_filter_start
     filter_end = st.session_state.date_filter_end
     
+    # Filter data
     filtered_df = filter_data_by_date_range(df, filter_start, filter_end)
     
+    # Show filtered data info
     if not filtered_df.empty:
         days_selected = (filter_end - filter_start).days + 1
         active_days = filtered_df['record_date'].dt.date.nunique() if 'record_date' in filtered_df.columns else 0
@@ -661,6 +656,7 @@ def create_vehicle_filter_sidebar(df):
     if df.empty:
         return df
     
+    # Vehicle type filter
     if 'vehicle_type' in df.columns:
         vehicle_types = ['Tất cả'] + list(df['vehicle_type'].unique())
         selected_type = st.sidebar.selectbox(
@@ -672,6 +668,7 @@ def create_vehicle_filter_sidebar(df):
         if selected_type != 'Tất cả':
             df = df[df['vehicle_type'] == selected_type]
     
+    # Vehicle ID filter (multiselect)
     if 'vehicle_id' in df.columns:
         vehicle_ids = list(df['vehicle_id'].unique())
         selected_vehicles = st.sidebar.multiselect(
@@ -683,6 +680,7 @@ def create_vehicle_filter_sidebar(df):
         if selected_vehicles:
             df = df[df['vehicle_id'].isin(selected_vehicles)]
     
+    # Driver filter (multiselect)
     if 'driver_name' in df.columns:
         drivers = list(df['driver_name'].unique())
         selected_drivers = st.sidebar.multiselect(
@@ -694,6 +692,7 @@ def create_vehicle_filter_sidebar(df):
         if selected_drivers:
             df = df[df['driver_name'].isin(selected_drivers)]
     
+    # Work category filter
     if 'work_category' in df.columns:
         work_categories = ['Tất cả'] + list(df['work_category'].dropna().unique())
         selected_category = st.sidebar.selectbox(
@@ -705,6 +704,7 @@ def create_vehicle_filter_sidebar(df):
         if selected_category != 'Tất cả':
             df = df[df['work_category'] == selected_category]
     
+    # Area type filter
     if 'area_type' in df.columns:
         area_types = ['Tất cả'] + list(df['area_type'].dropna().unique())
         selected_area = st.sidebar.selectbox(
@@ -718,20 +718,23 @@ def create_vehicle_filter_sidebar(df):
     
     return df
 
+# FIXED: create_metrics_overview() - ensure duration is parsed
 def create_metrics_overview(df):
-    """🔧 ENHANCED METRICS - Create overview metrics with robust time calculation"""
+    """Create overview metrics using English column names"""
     if df.empty:
         st.warning("⚠️ Không có dữ liệu để hiển thị")
         return
     
     st.markdown("## 📊 Tổng quan hoạt động")
     
-    # Ensure duration is validated again before metrics calculation
-    if 'duration_hours' in df.columns:
-        df = ensure_duration_parsed(df)
+    # FIXED: Ensure duration is properly parsed
+    df = ensure_duration_parsed(df)
     
+    # Use ALL data without any filtering
     total_trips = len(df)
     total_vehicles = df['vehicle_id'].nunique() if 'vehicle_id' in df.columns else 0
+    
+    # Driver count
     total_drivers = df['driver_name'].nunique() if 'driver_name' in df.columns else 0
     
     # Revenue calculation
@@ -744,19 +747,16 @@ def create_metrics_overview(df):
         total_revenue = 0
         avg_revenue_per_trip = 0
     
-    # 🔧 ENHANCED TIME CALCULATION
-    if 'duration_hours' in df.columns:
-        # More strict validation for metric calculation
+    # FIXED: Time calculation - ensure proper parsing
+    if 'Thời gian' in df.columns:
+        # Filter out invalid time data (negative or extremely large values)
         valid_time_data = df[
-            df['duration_hours'].notna() & 
-            (df['duration_hours'] > 0) & 
-            (df['duration_hours'] <= 24)
+            df['Thời gian'].notna() & 
+            (df['Thời gian'] >= 0) & 
+            (df['Thời gian'] <= 24)  # Reasonable daily limit
         ]
-        total_hours = valid_time_data['duration_hours'].sum()
-        avg_hours_per_trip = valid_time_data['duration_hours'].mean() if len(valid_time_data) > 0 else 0
-        
-        # Log time calculation for debugging
-        st.sidebar.info(f"⏱️ Valid time records: {len(valid_time_data)}/{len(df)}")
+        total_hours = valid_time_data['Thời gian'].sum()
+        avg_hours_per_trip = valid_time_data['Thời gian'].mean() if len(valid_time_data) > 0 else 0
     else:
         total_hours = 0
         avg_hours_per_trip = 0
@@ -771,7 +771,7 @@ def create_metrics_overview(df):
         total_distance = 0
         avg_distance = 0
     
-    # Display metrics
+    # Display metrics in 4-4 layout
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -834,8 +834,9 @@ def create_metrics_overview(df):
             help="Thời gian trung bình mỗi chuyến"
         )
 
+
 def create_frequency_metrics(df):
-    """Create frequency and activity metrics"""
+    """Create frequency and activity metrics using English columns"""
     st.markdown("## 🎯 Chỉ số tần suất hoạt động")
     
     if df.empty or 'record_date' not in df.columns:
@@ -846,29 +847,35 @@ def create_frequency_metrics(df):
         df['record_date'] = pd.to_datetime(df['record_date'], format='%m/%d/%Y', errors='coerce')
         df['date'] = df['record_date'].dt.date
         
+        # Filter out invalid dates
         valid_dates = df[df['record_date'].notna()]
         invalid_count = df['record_date'].isna().sum()
         
         if invalid_count > 0:
-            st.sidebar.info(f"ℹ️ {invalid_count} records có ngày không hợp lệ")
+            st.sidebar.info(f"ℹ️ {invalid_count} records có ngày không hợp lệ (vẫn tính trong tổng)")
         
         if valid_dates.empty:
             st.warning("⚠️ Không có dữ liệu ngày hợp lệ")
             return
         
-        active_days = valid_dates['date'].nunique()
+        # FIXED: Calculate actual active days (only days with trips)
+        active_days = valid_dates['date'].nunique()  # Only days with actual trips
         total_date_range = (valid_dates['record_date'].max() - valid_dates['record_date'].min()).days + 1
         
+        # Daily trip counts
         daily_trips = valid_dates.groupby('date')['vehicle_id'].count()
         
+        # Vehicle utilization
         total_vehicles = df['vehicle_id'].nunique() if 'vehicle_id' in df.columns else 1
         daily_active_vehicles = valid_dates.groupby('date')['vehicle_id'].nunique()
         
+        # Show date range info in sidebar for debugging
         st.sidebar.markdown("### 📅 Date Analysis")
         st.sidebar.info(f"📊 Từ: {valid_dates['record_date'].min().strftime('%d/%m/%Y')}")
         st.sidebar.info(f"📊 Đến: {valid_dates['record_date'].max().strftime('%d/%m/%Y')}")
         st.sidebar.info(f"📊 Tổng khoảng: {total_date_range} ngày")
         st.sidebar.info(f"📊 Ngày có hoạt động: {active_days} ngày")
+        st.sidebar.info(f"📊 Ngày không hoạt động: {total_date_range - active_days} ngày")
         
     except Exception as e:
         st.error(f"❌ Lỗi xử lý ngày tháng: {e}")
@@ -877,6 +884,7 @@ def create_frequency_metrics(df):
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
+        # FIXED: Use actual active days instead of total date range
         avg_trips_per_day = len(valid_dates) / active_days if active_days > 0 else 0
         st.metric(
             label="📈 Chuyến TB/ngày",
@@ -885,6 +893,7 @@ def create_frequency_metrics(df):
         )
     
     with col2:
+        # FIXED: Use active days for utilization calculation too
         avg_utilization = (daily_active_vehicles.mean() / total_vehicles * 100) if total_vehicles > 0 else 0
         st.metric(
             label="🚗 Tỷ lệ sử dụng xe TB",
@@ -910,7 +919,7 @@ def create_frequency_metrics(df):
             help=f"Ngày có ít chuyến nhất: {low_date}" if low_date else "Ngày có ít chuyến nhất"
         )
     
-    # Additional metrics row
+    # Additional metrics row - NEW
     st.markdown("<br>", unsafe_allow_html=True)
     col5, col6, col7, col8 = st.columns(4)
     
@@ -947,17 +956,17 @@ def create_frequency_metrics(df):
         )
 
 def create_vehicle_performance_table(df):
-    """🔧 ENHANCED VEHICLE TABLE - Create detailed vehicle performance table"""
+    """Create detailed vehicle performance table using English columns"""
     st.markdown("## 📋 Hiệu suất chi tiết từng xe")
     
     if df.empty or 'vehicle_id' not in df.columns:
         st.warning("⚠️ Không có dữ liệu xe")
         return
     
-    # Ensure duration is validated
-    if 'duration_hours' in df.columns:
-        df = ensure_duration_parsed(df)
+    # FIXED: Ensure duration is properly parsed
+    df = ensure_duration_parsed(df)
     
+    # Ensure datetime conversion
     try:
         if 'record_date' in df.columns:
             df['record_date'] = pd.to_datetime(df['record_date'], format='%m/%d/%Y', errors='coerce')
@@ -979,8 +988,9 @@ def create_vehicle_performance_table(df):
     else:
         df['revenue_vnd'] = 0
         
-    if 'duration_hours' not in df.columns:
-        df['duration_hours'] = 0
+    # FIXED: Duration is already parsed by ensure_duration_parsed()
+    if 'Thời gian' not in df.columns:
+        df['Thời gian'] = 0
         
     if 'distance_km' in df.columns:
         df['distance_km'] = df['distance_km'].apply(parse_distance)
@@ -999,21 +1009,23 @@ def create_vehicle_performance_table(df):
     for vehicle in vehicles:
         vehicle_data = df[df['vehicle_id'] == vehicle]
         
+        # Basic metrics
         total_trips = len(vehicle_data)
         total_revenue = float(vehicle_data['revenue_vnd'].sum())
         avg_revenue = float(vehicle_data['revenue_vnd'].mean()) if total_trips > 0 else 0.0
         
-        # 🔧 ENHANCED DURATION CALCULATION
+        # FIXED: Duration calculation - filter out invalid values
         valid_duration_data = vehicle_data[
-            vehicle_data['duration_hours'].notna() & 
-            (vehicle_data['duration_hours'] > 0) & 
-            (vehicle_data['duration_hours'] <= 24)
+            vehicle_data['Thời gian'].notna() & 
+            (vehicle_data['Thời gian'] >= 0) & 
+            (vehicle_data['Thời gian'] <= 24)
         ]
-        total_hours = float(valid_duration_data['duration_hours'].sum())
+        total_hours = float(valid_duration_data['Thời gian'].sum())
         
         total_distance = float(vehicle_data['distance_km'].sum())
         total_fuel = float(vehicle_data['fuel_liters'].sum())
         
+        # Days calculation
         if 'date' in vehicle_data.columns:
             active_days = vehicle_data['date'].nunique()
         else:
@@ -1047,9 +1059,11 @@ def create_vehicle_performance_table(df):
             'Hiệu suất': performance
         })
     
+    # Create DataFrame
     vehicle_display = pd.DataFrame(results)
     vehicle_display = vehicle_display.set_index('Mã xe').sort_values('Tổng doanh thu', ascending=False)
     
+    # Display table
     st.dataframe(
         vehicle_display.style.format({
             'Tổng doanh thu': '{:,.0f}',
@@ -1065,80 +1079,6 @@ def create_vehicle_performance_table(df):
         height=400
     )
 
-def create_driver_performance_table(df):
-    """🔧 ENHANCED DRIVER TABLE - Create driver performance table"""
-    st.markdown("## 👨‍💼 Hiệu suất tài xế")
-    
-    if df.empty or 'driver_name' not in df.columns:
-        st.warning("⚠️ Không có dữ liệu tài xế")
-        return
-    
-    # Ensure duration is validated
-    if 'duration_hours' in df.columns:
-        df = ensure_duration_parsed(df)
-    
-    try:
-        if 'record_date' in df.columns:
-            df['record_date'] = pd.to_datetime(df['record_date'], format='%m/%d/%Y', errors='coerce')
-            df['date'] = df['record_date'].dt.date
-    except:
-        pass
-    
-    if 'revenue_vnd' in df.columns:
-        df['revenue_vnd'] = pd.to_numeric(df['revenue_vnd'], errors='coerce').fillna(0)
-    else:
-        df['revenue_vnd'] = 0
-    
-    # Calculate metrics per driver
-    drivers = df['driver_name'].unique()
-    results = []
-    
-    for driver in drivers:
-        driver_data = df[df['driver_name'] == driver]
-        
-        total_trips = len(driver_data)
-        total_revenue = float(driver_data['revenue_vnd'].sum())
-        
-        # 🔧 ENHANCED DURATION CALCULATION FOR DRIVERS
-        valid_duration_data = driver_data[
-            driver_data['duration_hours'].notna() & 
-            (driver_data['duration_hours'] > 0) & 
-            (driver_data['duration_hours'] <= 24)
-        ]
-        total_hours = float(valid_duration_data['duration_hours'].sum())
-        
-        if 'date' in driver_data.columns:
-            active_days = driver_data['date'].nunique()
-        else:
-            active_days = 30
-        
-        trips_per_day = (float(total_trips) / float(active_days)) if active_days > 0 else 0.0
-        hours_per_day = (total_hours / float(active_days)) if active_days > 0 else 0.0
-        
-        results.append({
-            'Tên': driver,
-            'Số chuyến': total_trips,
-            'Tổng doanh thu': round(total_revenue, 0),
-            'Tổng giờ lái': round(total_hours, 1),
-            'Số ngày làm việc': active_days,
-            'Chuyến/ngày': round(trips_per_day, 1),
-            'Giờ lái/ngày': round(hours_per_day, 1)
-        })
-    
-    driver_display = pd.DataFrame(results)
-    driver_display = driver_display.set_index('Tên').sort_values('Tổng doanh thu', ascending=False)
-    
-    st.dataframe(
-        driver_display.style.format({
-            'Tổng doanh thu': '{:,.0f}',
-            'Tổng giờ lái': '{:.1f}',
-            'Chuyến/ngày': '{:.1f}',
-            'Giờ lái/ngày': '{:.1f}'
-        }),
-        use_container_width=True,
-        height=400
-    )
-
 def create_revenue_analysis_tab(df):
     """Tab 1: Phân tích doanh thu"""
     st.markdown("### 💰 Phân tích doanh thu chi tiết")
@@ -1147,6 +1087,7 @@ def create_revenue_analysis_tab(df):
         st.warning("⚠️ Không có dữ liệu doanh thu")
         return
     
+    # Ensure proper data types
     df['revenue_vnd'] = pd.to_numeric(df['revenue_vnd'], errors='coerce').fillna(0)
     revenue_data = df[df['revenue_vnd'] > 0].copy()
     
@@ -1247,21 +1188,21 @@ def create_vehicle_efficiency_tab(df):
         st.warning("⚠️ Không có dữ liệu xe")
         return
     
-    # Ensure duration is validated for efficiency calculation
-    if 'duration_hours' in df.columns:
-        df = ensure_duration_parsed(df)
-    
+    # Calculate efficiency metrics per vehicle
     vehicle_stats = []
     for vehicle in df['vehicle_id'].unique():
         vehicle_data = df[df['vehicle_id'] == vehicle]
         
+        # Basic metrics
         total_trips = len(vehicle_data)
-        total_hours = vehicle_data['duration_hours'].sum() if 'duration_hours' in vehicle_data.columns else 0
+        total_hours = vehicle_data['Thời gian'].sum() if 'Thời gian' in vehicle_data.columns else 0
         total_distance = vehicle_data['distance_km'].sum() if 'distance_km' in vehicle_data.columns else 0
         total_revenue = vehicle_data['revenue_vnd'].sum() if 'revenue_vnd' in vehicle_data.columns else 0
         
+        # Active days
         active_days = vehicle_data['date'].nunique() if 'date' in vehicle_data.columns else 1
         
+        # Efficiency metrics
         trips_per_day = total_trips / active_days if active_days > 0 else 0
         hours_per_trip = total_hours / total_trips if total_trips > 0 else 0
         distance_per_trip = total_distance / total_trips if total_trips > 0 else 0
@@ -1373,18 +1314,18 @@ def create_overload_analysis_tab(df):
     if 'date' in df.columns:
         # Vehicle daily workload
         vehicle_daily = df.groupby(['vehicle_id', 'date']).agg({
-            'duration_hours': 'sum',
+            'Thời gian': 'sum',
             'distance_km': 'sum',
-            'revenue_vnd': 'count'  # count trips
+            'revenue_vnd': 'count'  # count trips - use different column to avoid conflict
         }).reset_index()
         vehicle_daily.columns = ['vehicle_id', 'date', 'daily_hours', 'daily_distance', 'daily_trips']
         
         # Driver daily workload
         if 'driver_name' in df.columns:
             driver_daily = df.groupby(['driver_name', 'date']).agg({
-                'duration_hours': 'sum',
+                'Thời gian': 'sum',
                 'distance_km': 'sum',
-                'revenue_vnd': 'count'  # count trips
+                'revenue_vnd': 'count'  # count trips - use different column to avoid conflict
             }).reset_index()
             driver_daily.columns = ['driver_name', 'date', 'daily_hours', 'daily_distance', 'daily_trips']
         
@@ -1577,10 +1518,10 @@ def create_distance_analysis_tab(df):
     with col4:
         st.markdown("#### 🎯 Hiệu suất quãng đường theo xe")
         # Distance efficiency: km per hour
-        if 'duration_hours' in distance_data.columns:
+        if 'Thời gian' in distance_data.columns:
             # Create a copy to avoid modifying original data
             efficiency_data = distance_data.copy()
-            efficiency_data['km_per_hour'] = efficiency_data['distance_km'] / efficiency_data['duration_hours']
+            efficiency_data['km_per_hour'] = efficiency_data['distance_km'] / efficiency_data['Thời gian']
             efficiency_data['km_per_hour'] = efficiency_data['km_per_hour'].replace([np.inf, -np.inf], np.nan)
             
             vehicle_efficiency = efficiency_data.groupby('vehicle_id')['km_per_hour'].mean().reset_index()
@@ -1654,6 +1595,7 @@ def create_detailed_analysis_section(df):
         st.warning("⚠️ Không có dữ liệu để phân tích")
         return
     
+    # Ensure we have required packages
     try:
         import plotly.express as px
         import plotly.graph_objects as go
@@ -1683,19 +1625,100 @@ def create_detailed_analysis_section(df):
     with tab4:
         create_distance_analysis_tab(df)
 
-def main():
-    """🔧 COMPLETE MAIN FUNCTION - Full dashboard with all features + fixed time calculation"""
+def create_driver_performance_table(df):
+    """Create driver performance table using English columns"""
+    st.markdown("## 👨‍💼 Hiệu suất tài xế")
     
-    # 🔧 CRITICAL: Clear cache and force fresh start
-    st.cache_data.clear()
+    if df.empty or 'driver_name' not in df.columns:
+        st.warning("⚠️ Không có dữ liệu tài xế")
+        return
     
-    # Header
+    # FIXED: Ensure duration is properly parsed
+    df = ensure_duration_parsed(df)
+    
+    # Ensure datetime conversion
     try:
+        if 'record_date' in df.columns:
+            df['record_date'] = pd.to_datetime(df['record_date'], format='%m/%d/%Y', errors='coerce')
+            df['date'] = df['record_date'].dt.date
+    except:
+        pass
+    
+    # Ensure numeric columns
+    if 'revenue_vnd' in df.columns:
+        df['revenue_vnd'] = pd.to_numeric(df['revenue_vnd'], errors='coerce').fillna(0)
+    else:
+        df['revenue_vnd'] = 0
+
+    # FIXED: Duration is already parsed by ensure_duration_parsed()
+    # Remove the redundant parsing that was causing issues
+    
+    # Calculate metrics per driver
+    drivers = df['driver_name'].unique()
+    results = []
+    
+    for driver in drivers:
+        driver_data = df[df['driver_name'] == driver]
+        
+        # Basic metrics
+        total_trips = len(driver_data)
+        total_revenue = float(driver_data['revenue_vnd'].sum())
+        
+        # FIXED: Duration calculation - filter out invalid values
+        valid_duration_data = driver_data[
+            driver_data['Thời gian'].notna() & 
+            (driver_data['Thời gian'] >= 0) & 
+            (driver_data['Thời gian'] <= 24)
+        ]
+        total_hours = float(valid_duration_data['Thời gian'].sum())
+        
+        # Days calculation
+        if 'date' in driver_data.columns:
+            active_days = driver_data['date'].nunique()
+        else:
+            active_days = 30  # Default
+        
+        # Derived metrics
+        trips_per_day = (float(total_trips) / float(active_days)) if active_days > 0 else 0.0
+        hours_per_day = (total_hours / float(active_days)) if active_days > 0 else 0.0
+        
+        results.append({
+            'Tên': driver,
+            'Số chuyến': total_trips,
+            'Tổng doanh thu': round(total_revenue, 0),
+            'Tổng giờ lái': round(total_hours, 1),
+            'Số ngày làm việc': active_days,
+            'Chuyến/ngày': round(trips_per_day, 1),
+            'Giờ lái/ngày': round(hours_per_day, 1)
+        })
+    
+    # Create DataFrame
+    driver_display = pd.DataFrame(results)
+    driver_display = driver_display.set_index('Tên').sort_values('Tổng doanh thu', ascending=False)
+    
+    # Display table
+    st.dataframe(
+        driver_display.style.format({
+            'Tổng doanh thu': '{:,.0f}',
+            'Tổng giờ lái': '{:.1f}',
+            'Chuyến/ngày': '{:.1f}',
+            'Giờ lái/ngày': '{:.1f}'
+        }),
+        use_container_width=True,
+        height=400
+    )
+
+def main():
+    """Main dashboard function - Complete version with all features"""
+    # HEADER: logo + title on one line (flexbox)
+    try:
+        # Encode logo to base64 for inline <img>
         script_dir = os.path.dirname(os.path.abspath(__file__))
         logo_base64 = ""
+        # Check for logo.png in current directory first, then in ./assets/
         for p in [
-            os.path.join(script_dir, "logo.png"),
-            os.path.join(script_dir, "assets", "logo.png")
+            os.path.join(script_dir, "logo.png"),                      # 1️⃣ same-level logo
+            os.path.join(script_dir, "assets", "logo.png")            # 2️⃣ assets folder
         ]:
             if os.path.exists(p):
                 with open(p, "rb") as f:
@@ -1704,6 +1727,7 @@ def main():
     except Exception:
         logo_base64 = ""
 
+    # Build logo HTML (fallback emoji if logo not found)
     if logo_base64:
         logo_html = f"<img src='data:image/png;base64,{logo_base64}' style='height:150px; width:auto;' />"
     else:
@@ -1736,7 +1760,7 @@ def main():
     """
     st.markdown(header_html, unsafe_allow_html=True)
     
-    # Load data
+    # Load data first
     with st.spinner("📊 Đang tải dữ liệu từ GitHub..."):
         df_raw = load_data_from_github()
     
@@ -1748,20 +1772,7 @@ def main():
     # Sidebar controls
     st.sidebar.markdown("## 🔧 Điều khiển Dashboard")
     
-    # Debug toggle
-    debug_mode = st.sidebar.checkbox("🔧 Debug Mode", help="Hiển thị thông tin debug")
-    
-    if debug_mode:
-        st.sidebar.markdown("### 🔍 Debug Info")
-        st.sidebar.info(f"Python: {sys.version_info.major}.{sys.version_info.minor}")
-        st.sidebar.info(f"Pandas: {pd.__version__}")
-        st.sidebar.info(f"Numpy: {np.__version__}")
-        
-        if 'duration_hours' in df_raw.columns:
-            sample_duration = df_raw['duration_hours'].head(3).tolist()
-            st.sidebar.write(f"Sample durations: {sample_duration}")
-    
-    # Column mapping info
+    # Show column mapping info
     with st.sidebar.expander("📋 Column Mapping Guide"):
         st.write("**Vietnamese → English:**")
         for viet, eng in COLUMN_MAPPING.items():
@@ -1781,8 +1792,9 @@ def main():
     if 'last_sync' in st.session_state:
         st.sidebar.success(f"🕐 Sync cuối: {st.session_state.last_sync.strftime('%H:%M:%S %d/%m/%Y')}")
     
-    # Manual refresh
+    # Manual refresh button
     if st.sidebar.button("🔄 Làm mới Dashboard", help="Reload dữ liệu từ GitHub"):
+        # Clear date filters when refreshing data
         if 'date_filter_start' in st.session_state:
             del st.session_state.date_filter_start
         if 'date_filter_end' in st.session_state:
@@ -1792,14 +1804,15 @@ def main():
     
     st.sidebar.markdown("---")
     
-    # Apply filters
+    # DATE FILTER - Apply first
     df_filtered, start_date, end_date = create_date_filter_sidebar(df_raw)
     
     st.sidebar.markdown("---")
     
+    # VEHICLE & DRIVER FILTERS - Apply second
     df_final = create_vehicle_filter_sidebar(df_filtered)
     
-    # Show filter results
+    # Show filtered data stats
     st.sidebar.markdown("### 📊 Kết quả lọc")
     if not df_final.empty:
         vehicles_count = df_final['vehicle_id'].nunique() if 'vehicle_id' in df_final.columns else 0
@@ -1809,6 +1822,7 @@ def main():
         st.sidebar.metric("🚗 Số xe", f"{vehicles_count}")
         st.sidebar.metric("👨‍💼 Số tài xế", f"{drivers_count}")
         
+        # Show percentage of total data
         percentage = (len(df_final) / len(df_raw) * 100) if len(df_raw) > 0 else 0
         st.sidebar.info(f"📊 {percentage:.1f}% tổng dữ liệu")
     else:
@@ -1823,7 +1837,8 @@ def main():
             st.write(f"• `{col}`: {non_null_count}/{len(df_final)}")
     
     # Reset filters button
-    if st.sidebar.button("🔄 Reset tất cả bộ lọc"):
+    if st.sidebar.button("🔄 Reset tất cả bộ lọc", help="Quay về dữ liệu gốc"):
+        # Clear session state for filters
         if 'date_filter_start' in st.session_state:
             del st.session_state.date_filter_start
         if 'date_filter_end' in st.session_state:
@@ -1831,7 +1846,7 @@ def main():
         st.sidebar.success("✅ Đã reset bộ lọc ngày!")
         st.rerun()
     
-    # Dashboard sections
+    # Dashboard sections with filtered data
     st.markdown(f"## 📊 Báo cáo từ {start_date.strftime('%d/%m/%Y')} đến {end_date.strftime('%d/%m/%Y')}")
     
     create_metrics_overview(df_final)
@@ -1848,28 +1863,23 @@ def main():
     
     create_driver_performance_table(df_final)
     
-    # NEW: Complete detailed analysis section with all 4 tabs
+    # NEW: Detailed Analysis Section with Tabs
     create_detailed_analysis_section(df_final)
     
-    # Debug section
-    if debug_mode:
-        with st.expander("🔍 Advanced Debug Info"):
-            st.write("**Sample Filtered Data:**")
-            if not df_final.empty:
-                st.dataframe(df_final.head(3))
-            
-            st.write("**Column Data Types:**")
-            for col in df_final.columns:
-                st.write(f"• `{col}`: {df_final[col].dtype}")
-            
-            if 'duration_hours' in df_final.columns:
-                st.write("**Duration Column Analysis:**")
-                st.write(f"• Total records: {len(df_final)}")
-                st.write(f"• Non-null duration: {df_final['duration_hours'].notna().sum()}")
-                st.write(f"• Zero duration: {(df_final['duration_hours'] == 0).sum()}")
-                st.write(f"• Positive duration: {(df_final['duration_hours'] > 0).sum()}")
-                st.write(f"• Total hours: {df_final['duration_hours'].sum():.1f}")
-                st.write(f"• Sample values: {df_final['duration_hours'].head(5).tolist()}")
+    # Debug section for development
+    with st.sidebar.expander("🔍 Debug Info"):
+        st.write("**Sample Filtered Data (first 3 rows):**")
+        if not df_final.empty:
+            st.dataframe(df_final.head(3))
+        
+        st.write("**Column Data Types:**")
+        for col in df_final.columns:
+            st.write(f"• `{col}`: {df_final[col].dtype}")
+        
+        st.write("**Filter Summary:**")
+        st.write(f"• Raw data: {len(df_raw):,} records")
+        st.write(f"• After filters: {len(df_final):,} records")
+        st.write(f"• Date range: {start_date} to {end_date}")
 
 if __name__ == "__main__":
     main()
