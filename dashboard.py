@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 import sys
 from datetime import datetime
 import json
+from collections import defaultdict
 import base64
 import plotly.express as px
 import plotly.graph_objects as go
@@ -131,44 +132,62 @@ def get_github_token():
     
     return None
 
+
 def parse_duration_to_hours(duration_str):
     """
-    Chuyển đổi thời gian từ format h:mm sang số giờ (float)
-    
+    Convert a duration string (h:mm, h:mm:ss, or “h:mm:ss AM/PM”) to decimal
+    hours. The function is lenient and safe for all known bad inputs.
+
     Args:
-        duration_str (str): Thời gian format h:mm hoặc h:mm:ss
-    
+        duration_str (str): e.g. "2:30", "1:15:40", "2:20:00 AM"
+
     Returns:
-        float: Số giờ
+        float: duration expressed in hours (>= 0). Returns 0.0 on error.
     """
-    if not duration_str or duration_str == "":
+    if not duration_str:
         return 0.0
-    
-    # Loại bỏ khoảng trắng và các ký tự không mong muốn
+
+    # Normalise string
     duration_str = str(duration_str).strip()
-    
-    # Xử lý các format khác nhau
-    # Format: "2:20:00 AM" -> chỉ lấy phần thời gian
+
+    # Remove AM/PM if present
     if "AM" in duration_str or "PM" in duration_str:
         duration_str = duration_str.split()[0]
-    
+
     try:
-        # Split theo dấu ":"
         parts = duration_str.split(":")
-        
-        if len(parts) == 2:  # h:mm
-            hours = int(parts[0])
-            minutes = int(parts[1])
+        if len(parts) == 2:          # h:mm
+            hours, minutes = map(int, parts)
             return hours + minutes / 60.0
-        elif len(parts) == 3:  # h:mm:ss
-            hours = int(parts[0])
-            minutes = int(parts[1])
-            seconds = int(parts[2])
+        elif len(parts) == 3:        # h:mm:ss
+            hours, minutes, seconds = map(int, parts)
             return hours + minutes / 60.0 + seconds / 3600.0
-        else:
-            return 0.0
     except (ValueError, IndexError):
-        return 0.0
+        pass
+
+    return 0.0
+
+# Back‑compat shim (used earlier in the pipeline)
+def parse_duration_safe(duration_str):
+    return parse_duration_to_hours(duration_str)
+def calculate_driver_duration_summary(records):
+    """
+    Summarise total working hours for each driver using the robust duration parser.
+
+    Args:
+        records (Iterable[dict]): Raw fleet records (each a dict‑like row).
+
+    Returns:
+        dict[str, float]: Mapping {driver_name: total_hours}
+    """
+    summary = defaultdict(float)
+    for rec in records:
+        driver = rec.get("Tên tài xế", "").strip()
+        # Ignore empty or email‑like names
+        if not driver or "@" in driver:
+            continue
+        summary[driver] += parse_duration_to_hours(rec.get("Thời gian", ""))
+    return dict(summary)
 
 def parse_distance(distance_str):
     """Parse distance string and handle negative values"""
@@ -1836,3 +1855,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+    
