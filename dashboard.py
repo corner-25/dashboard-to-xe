@@ -463,7 +463,7 @@ def process_dataframe(df):
         
         # Process datetime columns - Handle mm/dd/yyyy format
         if 'record_date' in df.columns:
-            df['record_date'] = pd.to_datetime(df['record_date'], format='%m/%d/%Y', errors='coerce')
+            df['record_date'] = pd.to_datetime(df['record_date'], errors='coerce')  # Tự động detect format
             # Create helper columns
             df['date'] = df['record_date'].dt.date
             df['month'] = df['record_date'].dt.to_period('M').astype(str)
