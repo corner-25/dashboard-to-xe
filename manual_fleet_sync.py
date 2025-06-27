@@ -76,11 +76,14 @@ class ManualFleetSync:
             "nguyenhung091281@gmail.com": "Nguyễn Hùng",
             "nguyemthanhtrung12345@gmail.com": "Thành Trung",
             "nguyenhungumc@gmail.com": "Nguyễn Hùng",
-            "dvo567947@gmail.com": "Tài xế khác",
+            "dvo567947@gmail.com": "Đức",
             "traannhtuan461970@gmail.com": "Anh Tuấn",
             "hoanganhsie1983@gmail.com": "Hoàng Anh",
             "hoanganhsieumc@gmail.com": "Hoàng Anh",
-            "thaonguyenvan860@gmail.com": "Văn Thảo"
+            "thaonguyenvan860@gmail.com": "Văn Thảo",
+            "ledangthaiphong@gmail.com": "Thái Phong",
+            "dohungcuong1970@gmail.com": "Hùng Cường",
+            "trananhtuan74797@gmail.com": "Anh Tuấn"
         }
         
         # Stats
