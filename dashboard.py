@@ -133,57 +133,92 @@ def get_github_token():
 
 def parse_duration_to_hours(duration_str):
     """
-    Chuyển đổi thời gian từ format h:mm sang số giờ (float)
+    ROBUST VERSION: Chuyển đổi thời gian từ format h:mm sang số giờ (float)
+    Handles all edge cases in Streamlit environment
     
     Args:
-        duration_str (str): Thời gian format h:mm hoặc h:mm:ss
+        duration_str: Thời gian format h:mm hoặc h:mm:ss (có thể là str, float, int, None, NaN)
     
     Returns:
         float: Số giờ
     """
-    if not duration_str or duration_str == "":
+    # 🔧 STEP 1: Handle None, NaN, empty values first
+    if duration_str is None:
         return 0.0
     
-    # Loại bỏ khoảng trắng và các ký tự không mong muốn
-    duration_str = str(duration_str).strip()
+    # Handle pandas NA/NaN values
+    if pd.isna(duration_str):
+        return 0.0
     
-    # Xử lý các format khác nhau
-    # Format: "2:20:00 AM" -> chỉ lấy phần thời gian
-    if "AM" in duration_str or "PM" in duration_str:
-        duration_str = duration_str.split()[0]
+    # Handle numpy NaN
+    if isinstance(duration_str, (float, np.floating)) and np.isnan(duration_str):
+        return 0.0
     
+    # Handle empty string
+    if duration_str == "" or str(duration_str).strip() == "":
+        return 0.0
+    
+    # Handle already numeric values (edge case: already parsed)
+    if isinstance(duration_str, (int, float, np.number)):
+        # If it's already a number, assume it's hours
+        return float(duration_str) if duration_str >= 0 else 0.0
+    
+    # 🔧 STEP 2: Convert to string and clean
     try:
-        # Split theo dấu ":"
+        duration_str = str(duration_str).strip()
+        
+        # Handle special cases
+        if duration_str.lower() in ['na', 'nan', 'none', 'null', '']:
+            return 0.0
+        
+        # Remove AM/PM if present
+        if "AM" in duration_str.upper() or "PM" in duration_str.upper():
+            duration_str = duration_str.split()[0]
+        
+        # 🔧 STEP 3: Parse time format
         parts = duration_str.split(":")
         
         if len(parts) == 2:  # h:mm
-            hours = int(parts[0])
-            minutes = int(parts[1])
-            return hours + minutes / 60.0
+            hours = int(float(parts[0]))  # Handle "2.0:30" case
+            minutes = int(float(parts[1]))
+            return max(0.0, hours + minutes / 60.0)  # Ensure non-negative
+            
         elif len(parts) == 3:  # h:mm:ss
-            hours = int(parts[0])
-            minutes = int(parts[1])
-            seconds = int(parts[2])
-            return hours + minutes / 60.0 + seconds / 3600.0
+            hours = int(float(parts[0]))
+            minutes = int(float(parts[1]))
+            seconds = int(float(parts[2]))
+            return max(0.0, hours + minutes / 60.0 + seconds / 3600.0)
+            
         else:
-            return 0.0
-    except (ValueError, IndexError):
+            # Try to parse as decimal hours directly
+            return max(0.0, float(duration_str))
+            
+    except (ValueError, IndexError, TypeError, AttributeError) as e:
+        # 🔧 STEP 4: Fallback - return 0 for any parsing error
+        print(f"⚠️ Duration parse error for '{duration_str}': {e}")
         return 0.0
-
+        
 def ensure_duration_parsed(df):
     """
-    Đảm bảo cột duration_hours được parse đúng trong toàn bộ DataFrame
+    ROBUST VERSION: Đảm bảo cột duration_hours được parse đúng trong Streamlit
     """
-    if 'duration_hours' not in df.columns:
+    if df is None or df.empty or 'duration_hours' not in df.columns:
         return df
     
-    # Kiểm tra xem cột đã là numeric chưa
-    if not pd.api.types.is_numeric_dtype(df['duration_hours']):
-        # Nếu chưa, parse từ string
-        df['duration_hours'] = df['duration_hours'].apply(parse_duration_to_hours)
-    else:
-        # Nếu đã là numeric nhưng có thể có NaN, fill 0
-        df['duration_hours'] = df['duration_hours'].fillna(0)
+    # Always re-parse to ensure consistency
+    print(f"🔧 Parsing duration for {len(df)} records...")
+    
+    # Apply robust parsing
+    df['duration_hours'] = df['duration_hours'].apply(parse_duration_to_hours)
+    
+    # Ensure all values are valid floats
+    df['duration_hours'] = pd.to_numeric(df['duration_hours'], errors='coerce').fillna(0.0)
+    
+    # Filter out unrealistic values (more than 24 hours per trip)
+    df.loc[df['duration_hours'] > 24, 'duration_hours'] = 0.0
+    df.loc[df['duration_hours'] < 0, 'duration_hours'] = 0.0
+    
+    print(f"✅ Duration parsing complete. Total hours: {df['duration_hours'].sum():.1f}")
     
     return df
 
@@ -360,7 +395,7 @@ def parse_revenue(revenue_str):
         return 0.0
         
 def process_dataframe(df):
-    """Process DataFrame - Apply column mapping and clean data"""
+    """Process DataFrame - Apply column mapping and clean data - FIXED VERSION"""
     if df.empty:
         return df
     
@@ -368,55 +403,44 @@ def process_dataframe(df):
         st.sidebar.info(f"📥 Raw data: {len(df)} records, {len(df.columns)} columns")
         
         # STEP 1: Apply column mapping
-        # Create a reverse mapping for flexibility
         reverse_mapping = {}
         for viet_col, eng_col in COLUMN_MAPPING.items():
-            if eng_col is not None:  # Only map non-None columns
-                # Handle partial matches for long Vietnamese column names
+            if eng_col is not None:
                 for col in df.columns:
                     if viet_col in col:
                         reverse_mapping[col] = eng_col
                         break
         
-        # Rename columns
         df = df.rename(columns=reverse_mapping)
         
-        # STEP 2: Drop unnecessary columns (those mapped to None)
+        # STEP 2: Drop unnecessary columns
         drop_columns = []
         for viet_col in COLUMN_MAPPING.keys():
             if COLUMN_MAPPING[viet_col] is None:
-                # Find columns that contain this Vietnamese text
                 for col in df.columns:
                     if viet_col in col:
                         drop_columns.append(col)
         
         df = df.drop(columns=drop_columns, errors='ignore')
-        
-        # STEP 3: Handle duplicate columns by merging them
         df = df.loc[:, ~df.columns.duplicated()]
         
-        # STEP 4: Process data types
-        
-        # FIXED: Process duration - Convert to decimal hours using correct function name
+        # 🔧 STEP 3: FIXED - Process duration with robust parsing
         if 'duration_hours' in df.columns:
-            df['duration_hours'] = df['duration_hours'].apply(parse_duration_to_hours)
+            print("🔧 Processing duration_hours column...")
+            df = ensure_duration_parsed(df)
         
-        # Process distance - Handle negative values but keep all rows
+        # Process other columns
         if 'distance_km' in df.columns:
             df['distance_km'] = df['distance_km'].apply(parse_distance)
         
-        # Process revenue - Convert to numeric but keep all rows
         if 'revenue_vnd' in df.columns:
             df['revenue_vnd'] = df['revenue_vnd'].apply(parse_revenue)
         
-        # Process fuel consumption
         if 'fuel_liters' in df.columns:
             df['fuel_liters'] = pd.to_numeric(df['fuel_liters'], errors='coerce').fillna(0)
         
-        # Process datetime columns - Handle mm/dd/yyyy format
         if 'record_date' in df.columns:
-            df['record_date'] = pd.to_datetime(df['record_date'], errors='coerce')  # Tự động detect format
-            # Create helper columns
+            df['record_date'] = pd.to_datetime(df['record_date'], errors='coerce')
             df['date'] = df['record_date'].dt.date
             df['month'] = df['record_date'].dt.to_period('M').astype(str)
         
@@ -425,6 +449,8 @@ def process_dataframe(df):
         
     except Exception as e:
         st.sidebar.error(f"❌ Error processing data: {e}")
+        import traceback
+        print(f"❌ Full error: {traceback.format_exc()}")
         return df
 
 def run_sync_script():
