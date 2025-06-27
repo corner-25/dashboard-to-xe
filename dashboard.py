@@ -471,7 +471,7 @@ def run_sync_script():
         return False
 
 def filter_data_by_date_range(df, start_date, end_date):
-    """Filter dataframe by date range"""
+    """Filter dataframe by date range - FIXED to not drop invalid dates"""
     if df.empty or 'record_date' not in df.columns:
         return df
     
@@ -479,9 +479,19 @@ def filter_data_by_date_range(df, start_date, end_date):
         # Ensure record_date is datetime
         df['record_date'] = pd.to_datetime(df['record_date'], format='%m/%d/%Y', errors='coerce')
         
-        # Filter by date range
-        mask = (df['record_date'].dt.date >= start_date) & (df['record_date'].dt.date <= end_date)
-        filtered_df = df[mask].copy()
+        # Count invalid dates for debugging
+        invalid_count = df['record_date'].isna().sum()
+        if invalid_count > 0:
+            st.sidebar.warning(f"⚠️ Found {invalid_count} records with invalid dates - keeping them!")
+        
+        # FIXED: Include records with invalid dates in filter
+        # For invalid dates, we'll keep them in the result instead of dropping
+        valid_mask = (df['record_date'].notna()) & (df['record_date'].dt.date >= start_date) & (df['record_date'].dt.date <= end_date)
+        invalid_mask = df['record_date'].isna()
+        
+        # Keep both valid dates in range AND invalid dates
+        combined_mask = valid_mask | invalid_mask
+        filtered_df = df[combined_mask].copy()
         
         return filtered_df
         
@@ -821,6 +831,10 @@ def create_frequency_metrics(df):
         
         # Filter out invalid dates
         valid_dates = df[df['record_date'].notna()]
+        invalid_count = df['record_date'].isna().sum()
+        
+        if invalid_count > 0:
+            st.sidebar.info(f"ℹ️ {invalid_count} records có ngày không hợp lệ (vẫn tính trong tổng)")
         
         if valid_dates.empty:
             st.warning("⚠️ Không có dữ liệu ngày hợp lệ")
