@@ -1,49 +1,31 @@
-# OPTIMIZED REQUIREMENTS.TXT FOR STREAMLIT DASHBOARD
-# Fixed version conflicts and compatibility issues
+# PYTHON 3.13 COMPATIBLE REQUIREMENTS
+# Fixed for Python 3.13.5 environment
 
-# Core Data Processing (EXACT VERSIONS for compatibility)
-streamlit==1.29.0
-pandas==2.0.3
-numpy==1.24.3
+# Core Data Processing (PYTHON 3.13 COMPATIBLE)
+streamlit>=1.31.0          # Latest version with Python 3.13 support
+pandas>=2.1.0              # Python 3.13 compatible
+numpy>=1.25.0              # First version supporting Python 3.13
+plotly>=5.17.0             # Works with latest pandas/numpy
 
-# Visualization
-plotly==5.17.0
+# HTTP & Environment
+requests>=2.31.0
+python-dotenv>=1.0.0
 
-# HTTP Requests
-requests==2.31.0
+# Date/Time (Python 3.13 compatible)
+python-dateutil>=2.8.2
 
-# Environment Variables  
-python-dotenv==1.0.0
+# Google APIs (Latest compatible versions)
+google-auth>=2.25.0
+google-auth-oauthlib>=1.2.0  
+google-auth-httplib2>=0.2.0
+google-api-python-client>=2.110.0
 
-# Date/Time Handling (PINNED VERSIONS)
-python-dateutil==2.8.2
+# Additional utilities
+openpyxl>=3.1.2
+pytz>=2023.3
 
-# Google APIs (COMPATIBLE VERSIONS)
-google-auth==2.23.4
-google-auth-oauthlib==1.1.0
-google-auth-httplib2==0.1.1
-google-api-python-client==2.108.0
-
-# Additional dependencies that might be missing
-openpyxl==3.1.2          # For Excel file handling
-xlsxwriter==3.1.9        # For Excel export
-pytz==2023.3             # Timezone handling
-
-# REMOVED PROBLEMATIC VERSION RANGES
-# The >= syntax can cause conflicts in production
-
-# COMPATIBILITY NOTES:
-# - Streamlit 1.29.0 is stable with pandas 2.0.3
-# - Numpy 1.24.3 is the last version fully compatible with pandas 2.0.3  
-# - Plotly 5.17.0 has best streamlit integration
-# - Google API versions are tested together
-
-# INSTALLATION COMMAND:
-# pip install -r requirements.txt --force-reinstall
-
-# ALTERNATIVE MINIMAL VERSION (if above has conflicts):
-# streamlit==1.28.2
-# pandas==1.5.3  
-# numpy==1.23.5
-# plotly==5.15.0
-# requests==2.31.0
+# Alternative if above has issues:
+# streamlit>=1.30.0
+# pandas>=2.0.0  
+# numpy>=1.26.0
+# plotly>=5.15.0
