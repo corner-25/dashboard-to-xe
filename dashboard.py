@@ -447,7 +447,7 @@ def process_dataframe(df):
         
         # Process duration - Convert to decimal hours
         if 'duration_hours' in df.columns:
-            df['duration_hours'] = df['duration_hours'].apply(convert_time_to_hours)
+            df['duration_hours'] = df['duration_hours'].apply(parse_duration_safe)
         
         # Process distance - Handle negative values but keep all rows
         if 'distance_km' in df.columns:
