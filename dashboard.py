@@ -134,50 +134,106 @@ def get_github_token():
 def convert_time_to_hours(time_str):
     """
     Convert a duration string to decimal hours.
-
-    Accepts
-    -------
+    
+    Accepts various formats:
     • "hh:mm" or "hh:mm:ss"          → 2:30 → 2.5 h
-    • Variants with AM/PM appended   → "2:30:00 PM" → 2.5 h
-    • "h.mm" (decimal minutes /100) → "1.30" → 1 h 30 m
+    • "h.mm" (decimal minutes/100)   → "1.30" → 1.5 h (1h 30m)
     • Plain numeric string           → "2.5" → 2.5 h
-
-    Returns 0.0 for invalid / empty input.
+    • Time with AM/PM                → "2:30:00 PM" → 2.5 h (ignores AM/PM for duration)
+    
+    Returns 0.0 for invalid/empty input.
     """
     import re
     import pandas as pd
 
-    if pd.isna(time_str):
+    if pd.isna(time_str) or time_str == "" or time_str is None:
         return 0.0
 
     s = str(time_str).strip()
     if s == "":
         return 0.0
 
-    # Case 1 – clock notation with “:”
-    if ":" in s:
-        # Extract first three numeric groups separated by “:”
-        nums = re.findall(r"\d+", s)
-        if not nums:
-            return 0.0
-        hours = float(nums[0])
-        minutes = float(nums[1]) if len(nums) > 1 else 0
-        seconds = float(nums[2]) if len(nums) > 2 else 0
-        return hours + minutes / 60 + seconds / 3600
+    # CRITICAL FIX: Remove any AM/PM indicators for duration calculation
+    # Some data incorrectly has "2:20:00 AM" as duration when it should be "2:20"
+    s = re.sub(r'\s*(AM|PM|am|pm)\s*$', '', s, flags=re.IGNORECASE)
+    s = s.strip()
+    
+    # Additional fix for malformed duration data
+    if s.count(':') == 2:  # Format like "2:20:00" when it should be "2:20"
+        parts = s.split(':')
+        if len(parts) == 3 and parts[2] == '00':
+            s = f"{parts[0]}:{parts[1]}"  # Convert "2:20:00" to "2:20"
 
-    # Case 2 – decimal minutes on 100‑scale “h.mm”
+    # Case 1: Time format with colons "hh:mm" or "hh:mm:ss"
+    if ":" in s:
+        try:
+            time_parts = s.split(":")
+            hours = float(time_parts[0]) if time_parts[0] else 0
+            minutes = float(time_parts[1]) if len(time_parts) > 1 and time_parts[1] else 0
+            seconds = float(time_parts[2]) if len(time_parts) > 2 and time_parts[2] else 0
+            
+            # Validate ranges
+            if minutes >= 60 or seconds >= 60:
+                # Invalid time format, try as duration
+                return hours + minutes / 60 + seconds / 3600
+            
+            return hours + minutes / 60 + seconds / 3600
+        except (ValueError, IndexError):
+            return 0.0
+
+    # Case 2: Decimal format "h.mm" where mm represents minutes (not decimal hours)
     if "." in s:
         try:
-            hrs, mins = s.split(".", 1)
-            return float(hrs) + float(mins[:2]) / 60
-        except ValueError:
-            return 0.0
+            parts = s.split(".")
+            hours = float(parts[0])
+            
+            # Extract minutes part - could be 1-2 digits
+            minutes_str = parts[1]
+            if len(minutes_str) == 1:
+                # Single digit: "1.3" → 1h 30m
+                minutes = float(minutes_str) * 10
+            elif len(minutes_str) == 2:
+                # Two digits: "1.30" → 1h 30m
+                minutes = float(minutes_str)
+            else:
+                # More than 2 digits, treat as decimal hours
+                return float(s)
+            
+            # Validate minutes
+            if minutes >= 60:
+                # If minutes >= 60, treat as decimal hours instead
+                return float(s)
+            
+            return hours + minutes / 60
+        except (ValueError, IndexError):
+            # Fall back to treating as decimal hours
+            try:
+                return float(s)
+            except ValueError:
+                return 0.0
 
-    # Case 3 – already numeric
+    # Case 3: Plain numeric (already decimal hours)
     try:
         return float(s)
     except ValueError:
         return 0.0
+
+
+def parse_duration_safe(duration_str):
+    """
+    Safe wrapper for duration parsing with basic validation
+    """
+    if pd.isna(duration_str):
+        return 0.0
+    
+    result = convert_time_to_hours(duration_str)
+    
+    # Only check for negative values
+    if result < 0:
+        print(f"Warning: Negative duration {result:.2f}h from '{duration_str}' - setting to 0")
+        return 0.0
+    
+    return result
 
 def parse_distance(distance_str):
     """Parse distance string and handle negative values"""
