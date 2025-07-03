@@ -93,6 +93,7 @@ COLUMN_MAPPING = {
     'Ngày ghi nhận': 'record_date',  # mm/dd/yyyy format
     'Quãng đường': 'distance_km',
     'Đổ nhiên liệu': 'fuel_liters',
+    'Đổ nhiên liệu (Số lít)': 'fuel_liters',
     
     # Revenue (ambulance only)
     'Doanh thu': 'revenue_vnd',
