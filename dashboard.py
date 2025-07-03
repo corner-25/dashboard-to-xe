@@ -1607,7 +1607,9 @@ def create_fuel_analysis_tab(df):
         "50A-007.20": 20,
         "50A-004.55": 22,
         "50A-012.59": 10,
-        "51B-330.67": 29
+        "51B-330.67": 29,
+        "51A-1212: 0
+
     }
     
     # Đảm bảo dữ liệu nhiên liệu và quãng đường hợp lệ
@@ -1628,57 +1630,10 @@ def create_fuel_analysis_tab(df):
     # Remove unrealistic values
     df['distance_km'] = df['distance_km'].apply(lambda x: x if (x >= 0 and x <= 2000) else 0)
     
-    # Debug info
-    if st.sidebar.checkbox("🔍 Debug - Fuel Analysis Data", help="Hiển thị sample dữ liệu nhiên liệu"):
-        st.markdown("### 🔍 Debug - Sample dữ liệu nhiên liệu")
-        debug_sample = df[['vehicle_id', 'distance_km', 'fuel_liters']].head(10)
-        st.dataframe(debug_sample)
-        
-        st.markdown("### 📊 Thống kê dữ liệu")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write("**distance_km:**")
-            st.write(f"Min: {df['distance_km'].min()}")
-            st.write(f"Max: {df['distance_km'].max()}")
-            st.write(f"Mean: {df['distance_km'].mean():.2f}")
-            st.write(f"Records > 0: {len(df[df['distance_km'] > 0])}")
-        
-        with col2:
-            st.write("**fuel_liters:**")
-            st.write(f"Min: {df['fuel_liters'].min()}")
-            st.write(f"Max: {df['fuel_liters'].max()}")
-            st.write(f"Mean: {df['fuel_liters'].mean():.2f}")
-            st.write(f"Records > 0: {len(df[df['fuel_liters'] > 0])}")
-    
-    # FIXED: Lọc dữ liệu hợp lệ (có cả nhiên liệu và quãng đường > 0)
-    fuel_data = df[
-        (df['fuel_liters'] > 0) & 
-        (df['distance_km'] > 0) &
-        (df['fuel_liters'] <= 500) &  # Reasonable fuel limit
-        (df['distance_km'] <= 2000)   # Reasonable distance limit
-    ].copy()
     
     if fuel_data.empty:
         st.warning("⚠️ Không có dữ liệu nhiên liệu hợp lệ")
         st.info("Kiểm tra xem có chuyến nào có cả dữ liệu nhiên liệu VÀ quãng đường > 0 không")
-        return
-    
-    # FIXED: Tính mức tiêu thụ nhiên liệu (lít/100km) - công thức đúng
-    fuel_data['fuel_consumption_per_100km'] = (fuel_data['fuel_liters'] / fuel_data['distance_km']) * 100
-    
-    # FIXED: Loại bỏ outliers (mức tiêu thụ không hợp lý)
-    initial_count = len(fuel_data)
-    fuel_data = fuel_data[
-        (fuel_data['fuel_consumption_per_100km'] >= 5) &    # Minimum reasonable consumption
-        (fuel_data['fuel_consumption_per_100km'] <= 60)     # Maximum reasonable consumption
-    ]
-    
-    removed_outliers = initial_count - len(fuel_data)
-    if removed_outliers > 0:
-        st.sidebar.info(f"ℹ️ Đã loại bỏ {removed_outliers} chuyến có mức tiêu thụ bất thường")
-    
-    if fuel_data.empty:
-        st.warning("⚠️ Không có dữ liệu nhiên liệu hợp lệ sau khi lọc outliers")
         return
     
     # FIXED: Phân tích theo xe
