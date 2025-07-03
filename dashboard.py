@@ -412,6 +412,7 @@ def process_dataframe(df):
         
         # Process fuel consumption
         if 'fuel_liters' in df.columns:
+            df['fuel_liters'] = df['fuel_liters'].replace(['', 'null'], np.nan)
             df['fuel_liters'] = pd.to_numeric(df['fuel_liters'], errors='coerce').fillna(0)
         
         # Process datetime columns - Handle mm/dd/yyyy format
@@ -1631,6 +1632,12 @@ def create_fuel_analysis_tab(df):
     # Remove unrealistic values
     df['distance_km'] = df['distance_km'].apply(lambda x: x if (x >= 0 and x <= 2000) else 0)
     
+    fuel_data = df[
+    (df['fuel_liters'] > 0) & 
+    (df['distance_km'] > 0) &
+    (df['fuel_liters'] <= 500) &  # Reasonable fuel limit
+    (df['distance_km'] <= 2000)   # Reasonable distance limit
+].copy()
     
     if fuel_data.empty:
         st.warning("⚠️ Không có dữ liệu nhiên liệu hợp lệ")
