@@ -2331,20 +2331,6 @@ def main():
     # NEW: Detailed Analysis Section with Tabs
     create_detailed_analysis_section(df_final)
     
-    # Debug section for development
-    with st.sidebar.expander("🔍 Debug Info"):
-        st.write("**Sample Filtered Data (first 3 rows):**")
-        if not df_final.empty:
-            st.dataframe(df_final.head(3))
-        
-        st.write("**Column Data Types:**")
-        for col in df_final.columns:
-            st.write(f"• `{col}`: {df_final[col].dtype}")
-        
-        st.write("**Filter Summary:**")
-        st.write(f"• Raw data: {len(df_raw):,} records")
-        st.write(f"• After filters: {len(df_final):,} records")
-        st.write(f"• Date range: {start_date} to {end_date}")
 
 if __name__ == "__main__":
     main()
