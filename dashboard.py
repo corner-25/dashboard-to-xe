@@ -1628,27 +1628,6 @@ def create_fuel_analysis_tab(df):
     # Remove unrealistic values
     df['distance_km'] = df['distance_km'].apply(lambda x: x if (x >= 0 and x <= 2000) else 0)
     
-    # Debug info
-    if st.sidebar.checkbox("🔍 Debug - Fuel Analysis Data", help="Hiển thị sample dữ liệu nhiên liệu"):
-        st.markdown("### 🔍 Debug - Sample dữ liệu nhiên liệu")
-        debug_sample = df[['vehicle_id', 'distance_km', 'fuel_liters']].head(10)
-        st.dataframe(debug_sample)
-        
-        st.markdown("### 📊 Thống kê dữ liệu")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write("**distance_km:**")
-            st.write(f"Min: {df['distance_km'].min()}")
-            st.write(f"Max: {df['distance_km'].max()}")
-            st.write(f"Mean: {df['distance_km'].mean():.2f}")
-            st.write(f"Records > 0: {len(df[df['distance_km'] > 0])}")
-        
-        with col2:
-            st.write("**fuel_liters:**")
-            st.write(f"Min: {df['fuel_liters'].min()}")
-            st.write(f"Max: {df['fuel_liters'].max()}")
-            st.write(f"Mean: {df['fuel_liters'].mean():.2f}")
-            st.write(f"Records > 0: {len(df[df['fuel_liters'] > 0])}")
     
     # FIXED: Lọc dữ liệu hợp lệ (có cả nhiên liệu và quãng đường > 0)
     fuel_data = df[
@@ -1666,20 +1645,6 @@ def create_fuel_analysis_tab(df):
     # FIXED: Tính mức tiêu thụ nhiên liệu (lít/100km) - công thức đúng
     fuel_data['fuel_consumption_per_100km'] = (fuel_data['fuel_liters'] / fuel_data['distance_km']) * 100
     
-    # FIXED: Loại bỏ outliers (mức tiêu thụ không hợp lý)
-    initial_count = len(fuel_data)
-    fuel_data = fuel_data[
-        (fuel_data['fuel_consumption_per_100km'] >= 5) &    # Minimum reasonable consumption
-        (fuel_data['fuel_consumption_per_100km'] <= 60)     # Maximum reasonable consumption
-    ]
-    
-    removed_outliers = initial_count - len(fuel_data)
-    if removed_outliers > 0:
-        st.sidebar.info(f"ℹ️ Đã loại bỏ {removed_outliers} chuyến có mức tiêu thụ bất thường")
-    
-    if fuel_data.empty:
-        st.warning("⚠️ Không có dữ liệu nhiên liệu hợp lệ sau khi lọc outliers")
-        return
     
     # FIXED: Phân tích theo xe
     vehicle_fuel_analysis = []
@@ -2067,30 +2032,6 @@ def create_fuel_analysis_tab(df):
     for rec in recommendations:
         st.info(rec)
     
-    # FIXED: Debug calculation example
-    if st.sidebar.checkbox("🔧 Debug - Ví dụ tính toán", help="Hiển thị ví dụ tính toán chi tiết"):
-        st.markdown("### 🔧 Debug - Ví dụ tính toán chi tiết")
-        
-        if not vehicle_fuel_df.empty:
-            example_vehicle_data = vehicle_fuel_df.iloc[0]
-            vehicle_id = example_vehicle_data['vehicle_id']
-            
-            st.write(f"**Ví dụ tính toán cho xe {vehicle_id}:**")
-            
-            sample_trips = fuel_data[fuel_data['vehicle_id'] == vehicle_id].head(3)
-            if not sample_trips.empty:
-                calc_demo = sample_trips[['distance_km', 'fuel_liters', 'fuel_consumption_per_100km']].copy()
-                calc_demo['Tính toán check'] = (calc_demo['fuel_liters'] / calc_demo['distance_km']) * 100
-                
-                st.dataframe(calc_demo)
-                st.write(f"**Công thức**: (fuel_liters / distance_km) × 100")
-                st.write(f"**Trung bình xe {vehicle_id}**: {example_vehicle_data['avg_consumption']:.2f} L/100km")
-                if example_vehicle_data['standard'] > 0:
-                    st.write(f"**Định mức**: {example_vehicle_data['standard']} L/100km")
-                    st.write(f"**Chênh lệch**: {example_vehicle_data['deviation']:.2f} L/100km")
-                    st.write(f"**Trạng thái**: {example_vehicle_data['status']}")
-            else:
-                st.write("Không có dữ liệu mẫu cho xe này")
                 
 def create_detailed_analysis_section(df):
     """Create detailed analysis section with tabs"""
@@ -2376,20 +2317,6 @@ def main():
     # NEW: Detailed Analysis Section with Tabs
     create_detailed_analysis_section(df_final)
     
-    # Debug section for development
-    with st.sidebar.expander("🔍 Debug Info"):
-        st.write("**Sample Filtered Data (first 3 rows):**")
-        if not df_final.empty:
-            st.dataframe(df_final.head(3))
-        
-        st.write("**Column Data Types:**")
-        for col in df_final.columns:
-            st.write(f"• `{col}`: {df_final[col].dtype}")
-        
-        st.write("**Filter Summary:**")
-        st.write(f"• Raw data: {len(df_raw):,} records")
-        st.write(f"• After filters: {len(df_final):,} records")
-        st.write(f"• Date range: {start_date} to {end_date}")
 
 if __name__ == "__main__":
     main()
