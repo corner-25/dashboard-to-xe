@@ -1643,7 +1643,9 @@ def create_fuel_analysis_tab(df):
         st.warning("⚠️ Không có dữ liệu nhiên liệu hợp lệ")
         st.info("Kiểm tra xem có chuyến nào có cả dữ liệu nhiên liệu VÀ quãng đường > 0 không")
         return
-    
+        
+    fuel_data['fuel_consumption_per_100km'] = (fuel_data['fuel_liters'] / fuel_data['distance_km']) * 100
+
     # FIXED: Phân tích theo xe
     vehicle_fuel_analysis = []
     
