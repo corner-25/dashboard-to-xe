@@ -1670,7 +1670,7 @@ def create_fuel_analysis_tab(df):
     initial_count = len(fuel_data)
     fuel_data = fuel_data[
         (fuel_data['fuel_consumption_per_100km'] >= 5) &    # Minimum reasonable consumption
-        (fuel_data['fuel_consumption_per_100km'] <= 100)     # Maximum reasonable consumption
+        (fuel_data['fuel_consumption_per_100km'] <= 60)     # Maximum reasonable consumption
     ]
     
     removed_outliers = initial_count - len(fuel_data)
