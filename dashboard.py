@@ -187,12 +187,20 @@ def ensure_duration_parsed(df):
     
     return df
 
-def parse_distance(distance_str):
-    """Parse distance string and handle negative values"""
-    if pd.isna(distance_str):
+def parse_distance(distance_input):
+    """FIXED: Parse distance safely, handle both string and numeric input"""
+    if pd.isna(distance_input) or distance_input is None:
         return 0.0
     
+    # QUAN TRỌNG: Nếu đã là số, trả về luôn (tránh parse lại)
+    if isinstance(distance_input, (int, float)):
+        return abs(float(distance_input)) if distance_input >= 0 else 0.0
+    
     try:
+        distance_str = str(distance_input).strip()
+        if distance_str == "" or distance_str.lower() == "null":
+            return 0.0
+        
         distance = float(distance_str)
         return abs(distance) if distance < 0 else distance
     except:
@@ -1670,7 +1678,7 @@ def create_fuel_analysis_tab(df):
     initial_count = len(fuel_data)
     fuel_data = fuel_data[
         (fuel_data['fuel_consumption_per_100km'] >= 5) &    # Minimum reasonable consumption
-        (fuel_data['fuel_consumption_per_100km'] <= 60)     # Maximum reasonable consumption
+        (fuel_data['fuel_consumption_per_100km'] <= 100)     # Maximum reasonable consumption
     ]
     
     removed_outliers = initial_count - len(fuel_data)
