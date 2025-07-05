@@ -1001,7 +1001,7 @@ def create_vehicle_performance_table(df):
         df['Thời gian'] = 0
         
     if 'distance_km' in df.columns:
-        df['distance_km'] = df['distance_km'].apply(parse_distance)
+        df['distance_km'] = df['distance_km']
     else:
         df['distance_km'] = 0
         
