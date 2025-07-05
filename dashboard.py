@@ -411,7 +411,7 @@ def process_dataframe(df):
         
         # Process distance - Handle negative values but keep all rows
         if 'distance_km' in df.columns:
-            df['distance_km'] = df['distance_km'].apply(parse_distance)
+            df['distance_km'] = df['distance_km']
         
         # Process revenue - Convert to numeric but keep all rows
         if 'revenue_vnd' in df.columns:
@@ -771,7 +771,7 @@ def create_metrics_overview(df):
     
     # Distance calculation
     if 'distance_km' in df.columns:
-        df['distance_km'] = df['distance_km'].apply(parse_distance)
+        df['distance_km'] = df['distance_km']
         valid_distance_data = df[df['distance_km'].notna() & (df['distance_km'] >= 0)]
         total_distance = valid_distance_data['distance_km'].sum()
         avg_distance = valid_distance_data['distance_km'].mean() if len(valid_distance_data) > 0 else 0
@@ -1453,7 +1453,7 @@ def create_distance_analysis_tab(df):
         return
     
     # Ensure proper data types
-    df['distance_km'] = df['distance_km'].apply(parse_distance)
+    df['distance_km'] = df['distance_km']
     distance_data = df[df['distance_km'] > 0].copy()
     
     if distance_data.empty:
